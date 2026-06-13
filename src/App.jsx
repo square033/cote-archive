@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Sparkles, ChevronLeft, Trash2, Link as LinkIcon, Code2,
-  BookOpen, Loader2, Wand2, User, Heart, X, ClipboardList, Lightbulb, TriangleAlert, LogOut
+  BookOpen, Loader2, Wand2, User, Heart, X, ClipboardList, Lightbulb, TriangleAlert, LogOut, LogIn
 } from "lucide-react";
 import { supabase } from "./supabase";
 import AuthScreen from "./AuthScreen";
@@ -456,6 +456,17 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
 
 /* ───────────────────────── 메인 앱 ───────────────────────── */
 
+// 게스트 데이터는 브라우저 localStorage에 저장
+const GUEST_KEY = "cota:guest:v1";
+const loadGuest = () => {
+  try { return JSON.parse(localStorage.getItem(GUEST_KEY) || "[]"); }
+  catch { return []; }
+};
+const saveGuest = (arr) => {
+  try { localStorage.setItem(GUEST_KEY, JSON.stringify(arr)); }
+  catch (e) { console.error("게스트 저장 실패", e); }
+};
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -464,6 +475,8 @@ export default function App() {
   const [filter, setFilter] = useState("all");
   const [view, setView] = useState({ page: "home", id: null });
   const [showAdd, setShowAdd] = useState(false);
+  const [showAuth, setShowAuth] = useState(false); // 로그인 화면 모달 표시
+  const [syncing, setSyncing] = useState(false);
 
   // 로그인 세션 감시
   useEffect(() => {
@@ -471,14 +484,38 @@ export default function App() {
       setSession(data.session);
       setAuthReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s) setShowAuth(false); // 로그인되면 모달 닫기
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // 로그인하면 내 문제 불러오기
+  // 세션 상태에 따라 데이터 불러오기 (게스트=localStorage / 로그인=클라우드)
   useEffect(() => {
-    if (!session) { setProblems([]); setLoaded(false); return; }
+    if (!authReady) return;
     (async () => {
+      setLoaded(false);
+      if (!session) {
+        // 게스트: 브라우저에서 불러오기
+        setProblems(loadGuest());
+        setLoaded(true);
+        return;
+      }
+      // 로그인: 게스트로 쌓아둔 게 있으면 클라우드로 한 번 동기화
+      const guestData = loadGuest();
+      if (guestData.length > 0) {
+        setSyncing(true);
+        const rows = guestData.map((p) => ({
+          id: p.id, user_id: session.user.id, data: p,
+          created_at: new Date(p.createdAt).toISOString(),
+        }));
+        const { error } = await supabase.from("problems").upsert(rows);
+        if (error) console.error("동기화 실패", error);
+        else saveGuest([]); // 성공하면 게스트 데이터 비우기
+        setSyncing(false);
+      }
+      // 클라우드에서 전체 불러오기
       const { data, error } = await supabase
         .from("problems")
         .select("id, data")
@@ -487,32 +524,35 @@ export default function App() {
       else setProblems((data || []).map((row) => row.data));
       setLoaded(true);
     })();
-  }, [session]);
+  }, [session, authReady]);
 
-  // DB에 문제 1건 저장/수정 (jsonb 통째로 upsert)
-  const upsertRow = async (p) => {
+  // 문제 1건 저장/수정 (게스트=로컬, 로그인=클라우드)
+  const upsertRow = async (p, nextList) => {
+    if (!session) { saveGuest(nextList); return; }
     const { error } = await supabase.from("problems").upsert({
-      id: p.id,
-      user_id: session.user.id,
-      data: p,
+      id: p.id, user_id: session.user.id, data: p,
       created_at: new Date(p.createdAt).toISOString(),
     });
     if (error) { console.error("저장 실패", error); alert("저장에 실패했어요. 잠시 후 다시 시도해 주세요."); }
   };
 
   const addProblem = async (p) => {
-    setProblems([p, ...problems]);
+    const next = [p, ...problems];
+    setProblems(next);
     setShowAdd(false);
     setView({ page: "detail", id: p.id });
-    await upsertRow(p);
+    await upsertRow(p, next);
   };
   const updateProblem = async (p) => {
-    setProblems(problems.map((x) => (x.id === p.id ? p : x)));
-    await upsertRow(p);
+    const next = problems.map((x) => (x.id === p.id ? p : x));
+    setProblems(next);
+    await upsertRow(p, next);
   };
   const deleteProblem = async (id) => {
-    setProblems(problems.filter((x) => x.id !== id));
+    const next = problems.filter((x) => x.id !== id);
+    setProblems(next);
     setView({ page: "home", id: null });
+    if (!session) { saveGuest(next); return; }
     const { error } = await supabase.from("problems").delete().eq("id", id);
     if (error) console.error("삭제 실패", error);
   };
@@ -529,8 +569,10 @@ export default function App() {
     );
   }
 
-  // 비로그인 → 로그인 화면
-  if (!session) return <AuthScreen />;
+  // 로그인 화면을 모달로 띄운 경우 (게스트가 로그인 버튼 눌렀을 때)
+  if (showAuth && !session) {
+    return <AuthScreen onClose={() => setShowAuth(false)} />;
+  }
 
   const current = problems.find((p) => p.id === view.id);
   const shown = filter === "all" ? problems : problems.filter((p) => p.category === filter);
@@ -560,15 +602,50 @@ export default function App() {
           <PrimaryBtn onClick={() => setShowAdd(true)} style={{ padding: "10px 18px", fontSize: 14 }}>
             <Plus size={16} /> 문제 등록
           </PrimaryBtn>
-          <button onClick={logout} title="로그아웃" style={{
-            fontFamily: FONT, border: "1px solid #E5E8EB", background: "#fff", borderRadius: 12,
-            padding: "10px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-            color: "#6B7684", fontWeight: 700, fontSize: 13,
-          }}>
-            <LogOut size={15} />
-          </button>
+          {session ? (
+            <button onClick={logout} title="로그아웃" style={{
+              fontFamily: FONT, border: "1px solid #E5E8EB", background: "#fff", borderRadius: 12,
+              padding: "10px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              color: "#6B7684", fontWeight: 700, fontSize: 13,
+            }}>
+              <LogOut size={15} />
+            </button>
+          ) : (
+            <button onClick={() => setShowAuth(true)} style={{
+              fontFamily: FONT, border: "1px solid #E5E8EB", background: "#fff", borderRadius: 12,
+              padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              color: "#3182F6", fontWeight: 700, fontSize: 13.5,
+            }}>
+              <LogIn size={15} /> 로그인
+            </button>
+          )}
         </div>
       </header>
+
+      {/* 게스트 안내 배너 */}
+      {!session && (
+        <div style={{
+          ...clay.glass, margin: "14px auto 0", maxWidth: 980, padding: "12px 18px", borderRadius: 16,
+          display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, color: "#4E5968",
+          background: "linear-gradient(135deg,#FFF5E6,#FFF9F0)", border: "1px solid #FFE5C2",
+        }}>
+          <span style={{ fontSize: 18 }}>👋</span>
+          <span style={{ flex: 1, lineHeight: 1.5 }}>
+            <b style={{ color: "#E8923A" }}>게스트 모드</b>로 보고 있어요. 지금 저장한 건 이 브라우저에만 남아요.{" "}
+            <button onClick={() => setShowAuth(true)} style={{ fontFamily: FONT, border: "none", background: "transparent", color: "#3182F6", fontWeight: 800, cursor: "pointer", padding: 0, fontSize: 13.5 }}>
+              로그인하면
+            </button>{" "}
+            어디서든 보이고, 지금 저장한 것도 자동으로 옮겨가요!
+          </span>
+        </div>
+      )}
+
+      {/* 로그인 직후 동기화 중 표시 */}
+      {syncing && (
+        <div style={{ maxWidth: 980, margin: "10px auto 0", padding: "0 16px", display: "flex", alignItems: "center", gap: 8, color: "#3182F6", fontSize: 13.5, fontWeight: 700 }}>
+          <Loader2 size={15} className="spin" /> 게스트로 저장한 문제를 계정으로 옮기는 중…
+        </div>
+      )}
 
       {view.page === "detail" && current ? (
         <div className="rise"><ProblemDetail problem={current} onBack={() => setView({ page: "home", id: null })} onUpdate={updateProblem} onDelete={deleteProblem} /></div>

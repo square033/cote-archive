@@ -1,11 +1,11 @@
 // 로그인 / 회원가입 화면 — 토스 파스텔 클레이 스타일
 import { useState } from "react";
-import { Code2, Loader2, TriangleAlert, LogIn, UserPlus } from "lucide-react";
+import { Code2, Loader2, TriangleAlert, LogIn, UserPlus, ChevronLeft } from "lucide-react";
 import { supabase } from "./supabase";
 
 const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif`;
 
-export default function AuthScreen() {
+export default function AuthScreen({ onClose }) {
   const [mode, setMode] = useState("login"); // login | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -62,6 +62,16 @@ export default function AuthScreen() {
         boxShadow: "0 16px 40px rgba(100,116,139,0.14), inset 0 1px 0 rgba(255,255,255,0.9)",
         border: "1px solid rgba(255,255,255,0.7)",
       }}>
+        {/* 둘러보기로 돌아가기 (게스트가 로그인 화면 열었을 때만) */}
+        {onClose && (
+          <button onClick={onClose} style={{
+            fontFamily: FONT, border: "none", background: "transparent", color: "#8B95A1",
+            fontWeight: 700, fontSize: 13.5, cursor: "pointer", display: "inline-flex",
+            alignItems: "center", gap: 3, padding: 0, marginBottom: 14,
+          }}>
+            <ChevronLeft size={16} /> 둘러보기로 돌아가기
+          </button>
+        )}
         {/* 로고 */}
         <div style={{ textAlign: "center", marginBottom: 26 }}>
           <div style={{
