@@ -315,11 +315,43 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   const [memo, setMemo] = useState("");
   const [showBody, setShowBody] = useState(true);
   const [reviewing, setReviewing] = useState(null); // solution id
+  const [editingId, setEditingId] = useState(null); // 수정 중인 solution id
   const [err, setErr] = useState("");
+
+  // 수정 모드 시작 — 해당 풀이 값을 입력칸에 채워줌
+  const startEdit = (sol) => {
+    setEditingId(sol.id);
+    setCode(sol.code);
+    setMemo(sol.memo || "");
+    setSolType(sol.type);
+    setAuthor(sol.type === "others" ? sol.author : "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setCode(""); setMemo(""); setAuthor("");
+  };
 
   const addSolution = () => {
     if (!code.trim()) { setErr("코드를 입력해 주세요."); return; }
     setErr("");
+
+    // 수정 모드면 기존 풀이 덮어쓰기
+    if (editingId) {
+      onUpdate({
+        ...problem,
+        solutions: problem.solutions.map((s) =>
+          s.id === editingId
+            ? { ...s, code, memo: memo.trim(), type: solType, author: solType === "others" ? (author.trim() || "이름 없는 풀이") : "내 풀이" }
+            : s
+        ),
+      });
+      setEditingId(null);
+      setCode(""); setMemo(""); setAuthor("");
+      return;
+    }
+
     const sol = {
       id: "s" + Date.now(), type: solType, author: solType === "others" ? (author.trim() || "이름 없는 풀이") : "내 풀이",
       code, memo: memo.trim(), review: null, createdAt: Date.now(),
@@ -380,10 +412,19 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
       )}
 
       {/* 코드 작성 */}
-      <div style={{ ...clay.card, marginTop: 14, padding: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <Code2 size={17} color="#3182F6" />
-          <span style={{ fontWeight: 800, fontSize: 15, color: "#191F28" }}>풀이 작성 · 저장</span>
+      <div style={{ ...clay.card, marginTop: 14, padding: 20, border: editingId ? "2px solid #3182F6" : undefined }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Code2 size={17} color={editingId ? "#3182F6" : "#3182F6"} />
+            <span style={{ fontWeight: 800, fontSize: 15, color: "#191F28" }}>
+              {editingId ? "✏️ 풀이 수정 중" : "풀이 작성 · 저장"}
+            </span>
+          </div>
+          {editingId && (
+            <button onClick={cancelEdit} style={{ fontFamily: FONT, border: "none", background: "#F2F4F6", borderRadius: 10, padding: "6px 12px", cursor: "pointer", fontWeight: 700, fontSize: 13, color: "#6B7684", display: "flex", alignItems: "center", gap: 5 }}>
+              <X size={14} /> 수정 취소
+            </button>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -409,7 +450,9 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
 
         {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}><TriangleAlert size={15} />{err}</div>}
 
-        <PrimaryBtn onClick={addSolution}><Plus size={16} /> 풀이 저장하기</PrimaryBtn>
+        <PrimaryBtn onClick={addSolution} color={editingId ? "#1FA97E" : "#3182F6"}>
+          {editingId ? <><Sparkles size={16} /> 수정 저장하기</> : <><Plus size={16} /> 풀이 저장하기</>}
+        </PrimaryBtn>
       </div>
 
       {/* 저장된 풀이 */}
@@ -438,6 +481,12 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                   }}>
                     {reviewing === sol.id ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
                     {sol.review ? "리뷰 다시 받기" : "AI 코드 리뷰"}
+                  </button>
+                  <button onClick={() => startEdit(sol)} style={{
+                    fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: 13,
+                    color: "#3182F6", background: "#E4F0FF", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer",
+                  }}>
+                    ✏️ 수정
                   </button>
                   <button onClick={() => delSolution(sol.id)} style={{ border: "none", background: "#F2F4F6", borderRadius: 999, padding: "7px 10px", cursor: "pointer" }}>
                     <Trash2 size={14} color="#8B95A1" />
