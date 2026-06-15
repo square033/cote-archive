@@ -14,8 +14,9 @@ const CATEGORIES = [
   { id: "bin", name: "이진 탐색", short: "이분", emoji: "🎯", bg: "#E0F7EE", deep: "#1FA97E", grad: "linear-gradient(135deg,#CFF2E3,#E9FBF3)" },
   { id: "greedy", name: "그리디", short: "탐욕", emoji: "🍬", bg: "#FFF1DD", deep: "#E8923A", grad: "linear-gradient(135deg,#FFE5C2,#FFF5E6)" },
   { id: "dp", name: "다이나믹 프로그래밍", short: "DP", emoji: "🧩", bg: "#E4F0FF", deep: "#3182F6", grad: "linear-gradient(135deg,#CFE4FF,#EAF3FF)" },
+  { id: "etc", name: "기타", short: "기타", emoji: "📦", bg: "#F2F4F6", deep: "#6B7684", grad: "linear-gradient(135deg,#E8EAED,#F4F6F8)" },
 ];
-const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
+const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.find((c) => c.id === "etc");
 
 const clay = {
   card: {
@@ -50,15 +51,15 @@ async function askAI(prompt) {
 
 async function classifyProblem(title, body) {
   return askAI(
-    `다음 코딩테스트 문제를 아래 5가지 유형 중 정확히 하나로 분류해줘.
-유형 id 목록: dfs(DFS/BFS/백트래킹), dnc(분할 정복), bin(이진 탐색), greedy(그리디), dp(다이나믹 프로그래밍)
+    `다음 코딩테스트 문제를 아래 6가지 유형 중 정확히 하나로 분류해줘.
+유형 id 목록: dfs(DFS/BFS/백트래킹), dnc(분할 정복), bin(이진 탐색), greedy(그리디), dp(다이나믹 프로그래밍), etc(위 5가지에 해당하지 않는 기타 유형)
 
 문제 제목: ${title}
 문제 내용:
 ${body.slice(0, 3000)}
 
 반드시 아래 JSON 형식으로만 응답해. 마크다운이나 다른 텍스트 절대 금지:
-{"category":"dfs|dnc|bin|greedy|dp","reason":"분류 이유 한 문장"}`
+{"category":"dfs|dnc|bin|greedy|dp|etc","reason":"분류 이유 한 문장"}`
   );
 }
 
