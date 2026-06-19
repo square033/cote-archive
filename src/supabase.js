@@ -14,4 +14,10 @@ if (!url || !anonKey) {
   );
 }
 
-export const supabase = createClient(url, anonKey);
+export const supabase = createClient(url, anonKey, {
+  auth: {
+    persistSession: true,      // 로그인 상태를 브라우저에 저장
+    autoRefreshToken: true,    // 토큰 자동 갱신 (로그인 오래 유지)
+    detectSessionInUrl: true,
+  },
+});
