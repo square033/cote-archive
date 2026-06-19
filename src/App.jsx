@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus, Sparkles, ChevronLeft, Trash2, Link as LinkIcon, Code2,
   BookOpen, Loader2, Wand2, User, Heart, X, ClipboardList, Lightbulb, TriangleAlert, LogOut, LogIn
@@ -17,6 +17,13 @@ const CATEGORIES = [
   { id: "etc", name: "기타", short: "기타", emoji: "📦", bg: "#F2F4F6", deep: "#6B7684", grad: "linear-gradient(135deg,#E8EAED,#F4F6F8)" },
 ];
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.find((c) => c.id === "etc");
+
+const LEVELS = [
+  { id: "lv1", name: "Lv.1", label: "쉬움", color: "#1FA97E", bg: "#E0F7EE" },
+  { id: "lv2", name: "Lv.2", label: "보통", color: "#E8923A", bg: "#FFF1DD" },
+  { id: "lv3", name: "Lv.3", label: "어려움", color: "#E0527A", bg: "#FFE9EF" },
+];
+const levelOf = (id) => LEVELS.find((l) => l.id === id) || null;
 
 const clay = {
   card: {
@@ -226,12 +233,152 @@ function ReviewCard({ review }) {
 
 /* ───────────────────────── 문제 등록 모달 ───────────────────────── */
 
+/* ───────────────────────── 언어 & 간단 신택스 하이라이터 ───────────────────────── */
+
+const LANGUAGES = [
+  { id: "cpp", name: "C++", color: "#3182F6" },
+  { id: "python", name: "Python", color: "#1FA97E" },
+  { id: "java", name: "Java", color: "#E8923A" },
+  { id: "javascript", name: "JavaScript", color: "#E0B400" },
+  { id: "c", name: "C", color: "#6B7684" },
+  { id: "etc", name: "기타", color: "#8B95A1" },
+];
+const langOf = (id) => LANGUAGES.find((l) => l.id === id) || LANGUAGES.find((l) => l.id === "etc");
+
+// 키워드 사전 (언어별) — 정규식으로 토큰화해서 색칠하는 가벼운 하이라이터
+const KEYWORDS = {
+  cpp: ["int","long","double","float","char","bool","void","string","auto","const","static","class","struct","public","private","protected","return","if","else","for","while","do","switch","case","break","continue","include","using","namespace","std","vector","map","set","pair","true","false","new","delete","template","typename","null","nullptr"],
+  c: ["int","long","double","float","char","void","const","static","struct","return","if","else","for","while","do","switch","case","break","continue","include","define","typedef","sizeof","null"],
+  java: ["public","private","protected","class","static","void","int","long","double","float","boolean","char","String","return","if","else","for","while","do","switch","case","break","continue","new","import","package","extends","implements","interface","true","false","null","this","super","try","catch","finally"],
+  python: ["def","class","return","if","elif","else","for","while","break","continue","import","from","as","with","try","except","finally","raise","pass","lambda","yield","True","False","None","and","or","not","in","is","self","print"],
+  javascript: ["function","return","if","else","for","while","do","switch","case","break","continue","const","let","var","class","extends","new","import","export","from","default","true","false","null","undefined","this","async","await","try","catch","finally"],
+  etc: [],
+};
+
+// HTML 이스케이프
+const escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function highlightCode(code, lang) {
+  const kws = KEYWORDS[lang] || [];
+  const kwSet = new Set(kws);
+  // 문자열, 주석, 숫자, 단어 단위로 토큰화
+  const tokenRe = /(\/\/.*$)|(\/\*[\s\S]*?\*\/)|(#.*$)|("(?:[^"\\]|\\.)*")|('(?:[^'\\]|\\.)*')|(\b\d+\.?\d*\b)|([A-Za-z_]\w*)/gm;
+  let result = "";
+  let last = 0;
+  let m;
+  while ((m = tokenRe.exec(code))) {
+    result += escapeHtml(code.slice(last, m.index));
+    const [full, lineComment, blockComment, hashComment, dquote, squote, num, word] = m;
+    if (lineComment || blockComment || hashComment) {
+      result += `<span style="color:#6B8A99">${escapeHtml(full)}</span>`;
+    } else if (dquote || squote) {
+      result += `<span style="color:#9EEFC9">${escapeHtml(full)}</span>`;
+    } else if (num) {
+      result += `<span style="color:#FFB86C">${escapeHtml(full)}</span>`;
+    } else if (word && kwSet.has(word)) {
+      result += `<span style="color:#82AAFF;font-weight:700">${escapeHtml(full)}</span>`;
+    } else {
+      result += escapeHtml(full);
+    }
+    last = m.index + full.length;
+  }
+  result += escapeHtml(code.slice(last));
+  return result;
+}
+
+
+/* 굵게·정렬·표를 지원하는 가벼운 contentEditable 에디터.
+   표는 엑셀/구글시트에서 복사해 붙여넣으면 HTML 표가 그대로 인식돼요. */
+
+function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
+  const ref = useRef(null);
+  const [focused, setFocused] = useState(false);
+
+  // 외부에서 value가 바뀌었는데 (예: 초기 로드, 수정 모드 진입) 에디터 내용과 다르면 동기화
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== value) {
+      ref.current.innerHTML = value || "";
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value === "" ? "__empty__" : undefined]); // 초기화(빈 값으로 리셋)될 때만 강제 동기화
+
+  const exec = (cmd, arg) => {
+    document.execCommand(cmd, false, arg);
+    ref.current?.focus();
+    onChange(ref.current?.innerHTML || "");
+  };
+
+  const insertTable = () => {
+    const html = `<table style="border-collapse:collapse;width:100%;margin:8px 0;"><tbody>
+      <tr><td style="border:1px solid #D8DCE2;padding:6px 10px;">제목1</td><td style="border:1px solid #D8DCE2;padding:6px 10px;">제목2</td></tr>
+      <tr><td style="border:1px solid #D8DCE2;padding:6px 10px;">내용1</td><td style="border:1px solid #D8DCE2;padding:6px 10px;">내용2</td></tr>
+    </tbody></table><p><br></p>`;
+    exec("insertHTML", html);
+  };
+
+  const btn = (active) => ({
+    fontFamily: FONT, border: "1.5px solid " + (active ? "#3182F6" : "#E5E8EB"),
+    background: active ? "#E4F0FF" : "#fff", color: active ? "#3182F6" : "#6B7684",
+    borderRadius: 9, width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", fontWeight: 800, fontSize: 13.5, flexShrink: 0,
+  });
+
+  return (
+    <div style={{ border: "1.5px solid " + (focused ? "#3182F6" : "#E5E8EB"), borderRadius: 14, overflow: "hidden", background: "#FAFBFC" }}>
+      {/* 툴바 */}
+      <div style={{ display: "flex", gap: 6, padding: "8px 10px", borderBottom: "1px solid #EFF1F4", flexWrap: "wrap", background: "#F7F9FC" }}>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("bold")} style={btn(false)} title="굵게">B</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("italic")} style={{ ...btn(false), fontStyle: "italic" }} title="기울임">I</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("underline")} style={{ ...btn(false), textDecoration: "underline" }} title="밑줄">U</button>
+        <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyLeft")} style={btn(false)} title="왼쪽 정렬">⬅</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyCenter")} style={btn(false)} title="가운데 정렬">↔</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyRight")} style={btn(false)} title="오른쪽 정렬">➡</button>
+        <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={insertTable} style={btn(false)} title="표 삽입">⊞</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertUnorderedList")} style={btn(false)} title="목록">•≡</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("removeFormat")} style={{ ...btn(false), fontSize: 11, fontWeight: 700 }} title="서식 지우기">지움</button>
+      </div>
+      {/* 편집 영역 — 표 붙여넣기도 그대로 인식 */}
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onInput={(e) => onChange(e.currentTarget.innerHTML)}
+        onPaste={(e) => {
+          // 엑셀/표 복사 시 HTML 그대로 붙여넣기 허용 (서식·표 유지)
+          const html = e.clipboardData.getData("text/html");
+          if (html) {
+            e.preventDefault();
+            document.execCommand("insertHTML", false, html);
+            onChange(ref.current?.innerHTML || "");
+          }
+        }}
+        data-placeholder={placeholder}
+        className="rte-editable"
+        style={{
+          minHeight, padding: "12px 14px", fontSize: 14.5, lineHeight: 1.7, color: "#191F28",
+          outline: "none", fontFamily: FONT, overflowX: "auto",
+        }}
+      />
+      <style>{`
+        .rte-editable:empty:before { content: attr(data-placeholder); color: #A8B1BD; }
+        .rte-editable table { border-collapse: collapse; }
+        .rte-editable td, .rte-editable th { border: 1px solid #D8DCE2; padding: 6px 10px; }
+      `}</style>
+    </div>
+  );
+}
+
 function AddModal({ onClose, onSave }) {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [body, setBody] = useState("");
   const [mode, setMode] = useState("ai"); // ai | manual
   const [manualCat, setManualCat] = useState("dfs");
+  const [level, setLevel] = useState("lv1");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -240,15 +387,16 @@ function AddModal({ onClose, onSave }) {
     setErr(""); setBusy(true);
     try {
       let category = manualCat, reason = "";
+      const plainBody = body.replace(/<[^>]+>/g, " ").trim(); // AI 분류용 텍스트만 추출
       if (mode === "ai") {
-        if (!body.trim()) { setErr("AI 분류를 쓰려면 문제 내용을 붙여넣어 주세요."); setBusy(false); return; }
-        const r = await classifyProblem(title, body);
-        category = CATEGORIES.some((c) => c.id === r.category) ? r.category : "dfs";
+        if (!plainBody) { setErr("AI 분류를 쓰려면 문제 내용을 입력해 주세요."); setBusy(false); return; }
+        const r = await classifyProblem(title, plainBody);
+        category = CATEGORIES.some((c) => c.id === r.category) ? r.category : "etc";
         reason = r.reason || "";
       }
       onSave({
         id: "p" + Date.now(), title: title.trim(), url: url.trim(), body: body.trim(),
-        category, aiReason: reason, createdAt: Date.now(), solutions: [],
+        category, level, aiReason: reason, createdAt: Date.now(), solutions: [],
       });
     } catch (e) {
       setErr("AI 분류에 실패했어요. 잠시 후 다시 시도하거나 직접 선택해 주세요.");
@@ -260,7 +408,7 @@ function AddModal({ onClose, onSave }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(25,31,40,0.45)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ ...clay.card, width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", padding: 24, borderRadius: 28 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...clay.card, width: "100%", maxWidth: 620, maxHeight: "90vh", overflowY: "auto", padding: 24, borderRadius: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#191F28" }}>새 문제 등록</h2>
           <button onClick={onClose} style={{ border: "none", background: "#F2F4F6", borderRadius: 999, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} color="#6B7684" /></button>
@@ -269,7 +417,27 @@ function AddModal({ onClose, onSave }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <input style={input} placeholder="문제 제목 (예: 네트워크 — 프로그래머스 Lv.3)" value={title} onChange={(e) => setTitle(e.target.value)} />
           <input style={input} placeholder="문제 링크 (선택)" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <textarea style={{ ...input, minHeight: 140, resize: "vertical", lineHeight: 1.6 }} placeholder="문제 내용을 붙여넣어 주세요. AI가 이 내용을 보고 유형을 분류해요." value={body} onChange={(e) => setBody(e.target.value)} />
+
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8B95A1", marginBottom: 6 }}>
+              문제 내용 — 굵게·정렬·표 사용 가능, 엑셀/표 복사 붙여넣기도 인식돼요
+            </div>
+            <RichTextEditor value={body} onChange={setBody} placeholder="문제 내용을 작성하거나 붙여넣어 주세요. AI가 이 내용을 보고 유형을 분류해요." minHeight={150} />
+          </div>
+
+          {/* 난이도(레벨) */}
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8B95A1", marginBottom: 6 }}>난이도</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {LEVELS.map((l) => (
+                <button key={l.id} onClick={() => setLevel(l.id)} style={{
+                  fontFamily: FONT, flex: 1, padding: "10px 0", borderRadius: 12, fontWeight: 800, fontSize: 13.5, cursor: "pointer",
+                  border: level === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
+                  background: level === l.id ? l.bg : "#fff", color: level === l.id ? l.color : "#6B7684",
+                }}>{l.name} <span style={{ fontWeight: 600, fontSize: 12 }}>· {l.label}</span></button>
+              ))}
+            </div>
+          </div>
 
           {/* 분류 방식 */}
           <div style={{ background: "#F7F9FC", borderRadius: 18, padding: 14 }}>
@@ -284,7 +452,7 @@ function AddModal({ onClose, onSave }) {
               ))}
             </div>
             {mode === "ai" ? (
-              <p style={{ margin: 0, fontSize: 13, color: "#6B7684", lineHeight: 1.5 }}>등록 버튼을 누르면 문제 내용을 분석해 5가지 유형 중 하나로 자동 분류해요. ✨</p>
+              <p style={{ margin: 0, fontSize: 13, color: "#6B7684", lineHeight: 1.5 }}>등록 버튼을 누르면 문제 내용을 분석해 6가지 유형 중 하나로 자동 분류해요. ✨</p>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {CATEGORIES.map((c) => (
@@ -309,52 +477,28 @@ function AddModal({ onClose, onSave }) {
 
 function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   const c = catOf(problem.category);
+  const lv = levelOf(problem.level);
   const [code, setCode] = useState("");
+  const [lang, setLang] = useState("cpp");
   const [solType, setSolType] = useState("mine"); // mine | others
   const [author, setAuthor] = useState("");
   const [memo, setMemo] = useState("");
   const [showBody, setShowBody] = useState(true);
+  const [editingBody, setEditingBody] = useState(false);
+  const [bodyDraft, setBodyDraft] = useState(problem.body || "");
   const [reviewing, setReviewing] = useState(null); // solution id
-  const [editingId, setEditingId] = useState(null); // 수정 중인 solution id
+  const [editingId, setEditingId] = useState(null); // 인라인 수정 중인 solution id
+  const [inlineCode, setInlineCode] = useState("");
+  const [inlineMemo, setInlineMemo] = useState("");
+  const [inlineLang, setInlineLang] = useState("cpp");
   const [err, setErr] = useState("");
-
-  // 수정 모드 시작 — 해당 풀이 값을 입력칸에 채워줌
-  const startEdit = (sol) => {
-    setEditingId(sol.id);
-    setCode(sol.code);
-    setMemo(sol.memo || "");
-    setSolType(sol.type);
-    setAuthor(sol.type === "others" ? sol.author : "");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setCode(""); setMemo(""); setAuthor("");
-  };
 
   const addSolution = () => {
     if (!code.trim()) { setErr("코드를 입력해 주세요."); return; }
     setErr("");
-
-    // 수정 모드면 기존 풀이 덮어쓰기
-    if (editingId) {
-      onUpdate({
-        ...problem,
-        solutions: problem.solutions.map((s) =>
-          s.id === editingId
-            ? { ...s, code, memo: memo.trim(), type: solType, author: solType === "others" ? (author.trim() || "이름 없는 풀이") : "내 풀이" }
-            : s
-        ),
-      });
-      setEditingId(null);
-      setCode(""); setMemo(""); setAuthor("");
-      return;
-    }
-
     const sol = {
       id: "s" + Date.now(), type: solType, author: solType === "others" ? (author.trim() || "이름 없는 풀이") : "내 풀이",
-      code, memo: memo.trim(), review: null, createdAt: Date.now(),
+      code, lang, memo: memo.trim(), review: null, createdAt: Date.now(),
     };
     onUpdate({ ...problem, solutions: [sol, ...problem.solutions] });
     setCode(""); setMemo(""); setAuthor("");
@@ -373,7 +517,47 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
 
   const delSolution = (id) => onUpdate({ ...problem, solutions: problem.solutions.filter((s) => s.id !== id) });
 
+  // 인라인 수정 — 풀이 카드 자체에서 편집
+  const startInlineEdit = (sol) => {
+    setEditingId(sol.id);
+    setInlineCode(sol.code);
+    setInlineMemo(sol.memo || "");
+    setInlineLang(sol.lang || "cpp");
+  };
+  const cancelInlineEdit = () => setEditingId(null);
+  const saveInlineEdit = (id) => {
+    onUpdate({
+      ...problem,
+      solutions: problem.solutions.map((s) =>
+        s.id === id ? { ...s, code: inlineCode, memo: inlineMemo.trim(), lang: inlineLang } : s
+      ),
+    });
+    setEditingId(null);
+  };
+
+  // 문제 내용 수정
+  const saveBody = () => {
+    onUpdate({ ...problem, body: bodyDraft });
+    setEditingBody(false);
+  };
+  const cancelBodyEdit = () => {
+    setBodyDraft(problem.body || "");
+    setEditingBody(false);
+  };
+
   const mono = { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" };
+
+  const langPicker = (value, onChange) => (
+    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+      {LANGUAGES.map((l) => (
+        <button key={l.id} type="button" onClick={() => onChange(l.id)} style={{
+          fontFamily: FONT, padding: "5px 11px", borderRadius: 999, fontWeight: 700, fontSize: 12, cursor: "pointer",
+          border: value === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
+          background: value === l.id ? l.color + "22" : "#fff", color: value === l.id ? l.color : "#8B95A1",
+        }}>{l.name}</button>
+      ))}
+    </div>
+  );
 
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", padding: "0 16px 80px" }}>
@@ -385,7 +569,14 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
       <div style={{ ...clay.card, padding: 24, background: c.grad, border: "1px solid rgba(255,255,255,0.8)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
           <div>
-            <CatBadge id={problem.category} />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <CatBadge id={problem.category} />
+              {lv && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: lv.bg, color: lv.color, fontWeight: 800, fontSize: 13, padding: "6px 12px", borderRadius: 999, fontFamily: FONT }}>
+                  {lv.name} · {lv.label}
+                </span>
+              )}
+            </div>
             <h1 style={{ margin: "12px 0 6px", fontSize: 24, fontWeight: 800, color: "#191F28", lineHeight: 1.3 }}>{problem.title}</h1>
             {problem.aiReason && <p style={{ margin: 0, fontSize: 13, color: c.deep, fontWeight: 600 }}>✨ AI 분류 이유 · {problem.aiReason}</p>}
             {problem.url && (
@@ -401,30 +592,43 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
         </div>
       </div>
 
-      {/* 문제 내용 */}
-      {problem.body && (
-        <div style={{ ...clay.card, marginTop: 14, padding: 20 }}>
+      {/* 문제 내용 — 보기 / 수정 */}
+      <div style={{ ...clay.card, marginTop: 14, padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <button onClick={() => setShowBody(!showBody)} style={{ fontFamily: FONT, border: "none", background: "transparent", fontWeight: 800, fontSize: 15, color: "#191F28", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0 }}>
             <BookOpen size={16} color={c.deep} /> 문제 내용 {showBody ? "접기" : "펼치기"}
           </button>
-          {showBody && <pre style={{ margin: "14px 0 0", whiteSpace: "pre-wrap", fontFamily: FONT, fontSize: 14, color: "#4E5968", lineHeight: 1.7 }}>{problem.body}</pre>}
-        </div>
-      )}
-
-      {/* 코드 작성 */}
-      <div style={{ ...clay.card, marginTop: 14, padding: 20, border: editingId ? "2px solid #3182F6" : undefined }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Code2 size={17} color={editingId ? "#3182F6" : "#3182F6"} />
-            <span style={{ fontWeight: 800, fontSize: 15, color: "#191F28" }}>
-              {editingId ? "✏️ 풀이 수정 중" : "풀이 작성 · 저장"}
-            </span>
-          </div>
-          {editingId && (
-            <button onClick={cancelEdit} style={{ fontFamily: FONT, border: "none", background: "#F2F4F6", borderRadius: 10, padding: "6px 12px", cursor: "pointer", fontWeight: 700, fontSize: 13, color: "#6B7684", display: "flex", alignItems: "center", gap: 5 }}>
-              <X size={14} /> 수정 취소
-            </button>
+          {showBody && !editingBody && (
+            <button onClick={() => { setBodyDraft(problem.body || ""); setEditingBody(true); }} style={{
+              fontFamily: FONT, border: "none", background: "#E4F0FF", color: "#3182F6", borderRadius: 999,
+              padding: "6px 12px", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
+            }}>✏️ 수정</button>
           )}
+        </div>
+
+        {showBody && (
+          editingBody ? (
+            <div style={{ marginTop: 14 }}>
+              <RichTextEditor value={bodyDraft} onChange={setBodyDraft} placeholder="문제 내용을 작성해 주세요." minHeight={160} />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <PrimaryBtn onClick={saveBody} color="#1FA97E"><Sparkles size={15} /> 저장</PrimaryBtn>
+                <button onClick={cancelBodyEdit} style={{ fontFamily: FONT, border: "1.5px solid #E5E8EB", background: "#fff", borderRadius: 14, padding: "0 18px", fontWeight: 700, fontSize: 14, color: "#6B7684", cursor: "pointer" }}>취소</button>
+              </div>
+            </div>
+          ) : problem.body ? (
+            <div className="rte-editable" style={{ marginTop: 14, fontSize: 14, color: "#4E5968", lineHeight: 1.7 }}
+              dangerouslySetInnerHTML={{ __html: problem.body }} />
+          ) : (
+            <p style={{ margin: "14px 0 0", color: "#A8B1BD", fontSize: 13.5 }}>아직 문제 내용이 없어요. 수정 버튼으로 작성해 보세요.</p>
+          )
+        )}
+      </div>
+
+      {/* 새 풀이 작성 */}
+      <div style={{ ...clay.card, marginTop: 14, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <Code2 size={17} color="#3182F6" />
+          <span style={{ fontWeight: 800, fontSize: 15, color: "#191F28" }}>풀이 작성 · 저장</span>
         </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -441,6 +645,8 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
           )}
         </div>
 
+        <div style={{ marginBottom: 8 }}>{langPicker(lang, setLang)}</div>
+
         <textarea value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false}
           placeholder={"// 여기에 코드를 작성하거나 붙여넣어 주세요\n#include <bits/stdc++.h>\nusing namespace std;"}
           style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 220, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 16, padding: 16, fontSize: 13.5, lineHeight: 1.65, outline: "none" }} />
@@ -450,9 +656,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
 
         {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}><TriangleAlert size={15} />{err}</div>}
 
-        <PrimaryBtn onClick={addSolution} color={editingId ? "#1FA97E" : "#3182F6"}>
-          {editingId ? <><Sparkles size={16} /> 수정 저장하기</> : <><Plus size={16} /> 풀이 저장하기</>}
-        </PrimaryBtn>
+        <PrimaryBtn onClick={addSolution}><Plus size={16} /> 풀이 저장하기</PrimaryBtn>
       </div>
 
       {/* 저장된 풀이 */}
@@ -464,40 +668,73 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {problem.solutions.map((sol) => (
-            <div key={sol.id} style={{ ...clay.card, padding: 18 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 13.5,
-                  color: sol.type === "mine" ? "#3182F6" : "#E0527A",
-                  background: sol.type === "mine" ? "#E4F0FF" : "#FFE9EF", padding: "5px 12px", borderRadius: 999,
-                }}>
-                  {sol.type === "mine" ? <User size={13} /> : <Heart size={13} />} {sol.author}
-                </span>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => runReview(sol)} disabled={reviewing === sol.id} style={{
-                    fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13,
-                    color: "#7C5CE0", background: "#EFE9FF", border: "none", borderRadius: 999, padding: "7px 14px", cursor: "pointer",
-                  }}>
-                    {reviewing === sol.id ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
-                    {sol.review ? "리뷰 다시 받기" : "AI 코드 리뷰"}
-                  </button>
-                  <button onClick={() => startEdit(sol)} style={{
-                    fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: 13,
-                    color: "#3182F6", background: "#E4F0FF", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer",
-                  }}>
-                    ✏️ 수정
-                  </button>
-                  <button onClick={() => delSolution(sol.id)} style={{ border: "none", background: "#F2F4F6", borderRadius: 999, padding: "7px 10px", cursor: "pointer" }}>
-                    <Trash2 size={14} color="#8B95A1" />
-                  </button>
+          {problem.solutions.map((sol) => {
+            const isEditing = editingId === sol.id;
+            const solLang = langOf(sol.lang);
+            return (
+              <div key={sol.id} style={{ ...clay.card, padding: 18, border: isEditing ? "2px solid #3182F6" : undefined }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 13.5,
+                      color: sol.type === "mine" ? "#3182F6" : "#E0527A",
+                      background: sol.type === "mine" ? "#E4F0FF" : "#FFE9EF", padding: "5px 12px", borderRadius: 999,
+                    }}>
+                      {sol.type === "mine" ? <User size={13} /> : <Heart size={13} />} {sol.author}
+                    </span>
+                    {!isEditing && (
+                      <span style={{ fontSize: 11.5, fontWeight: 800, color: solLang.color, background: solLang.color + "1A", padding: "4px 10px", borderRadius: 999 }}>
+                        {solLang.name}
+                      </span>
+                    )}
+                  </div>
+                  {!isEditing && (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => runReview(sol)} disabled={reviewing === sol.id} style={{
+                        fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13,
+                        color: "#7C5CE0", background: "#EFE9FF", border: "none", borderRadius: 999, padding: "7px 14px", cursor: "pointer",
+                      }}>
+                        {reviewing === sol.id ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
+                        {sol.review ? "리뷰 다시 받기" : "AI 코드 리뷰"}
+                      </button>
+                      <button onClick={() => startInlineEdit(sol)} style={{
+                        fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: 13,
+                        color: "#3182F6", background: "#E4F0FF", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer",
+                      }}>✏️ 수정</button>
+                      <button onClick={() => delSolution(sol.id)} style={{ border: "none", background: "#F2F4F6", borderRadius: 999, padding: "7px 10px", cursor: "pointer" }}>
+                        <Trash2 size={14} color="#8B95A1" />
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {isEditing ? (
+                  // ── 인라인 수정 모드: 카드 그 자리에서 바로 편집 ──
+                  <div>
+                    <div style={{ marginBottom: 8 }}>{langPicker(inlineLang, setInlineLang)}</div>
+                    <textarea value={inlineCode} onChange={(e) => setInlineCode(e.target.value)} spellCheck={false}
+                      style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 200, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, outline: "none" }} />
+                    <input value={inlineMemo} onChange={(e) => setInlineMemo(e.target.value)} placeholder="메모 (선택)"
+                      style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 12, padding: "10px 13px", fontSize: 13.5, outline: "none", margin: "10px 0", background: "#FAFBFC" }} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <PrimaryBtn onClick={() => saveInlineEdit(sol.id)} color="#1FA97E" style={{ padding: "10px 18px", fontSize: 13.5 }}>
+                        <Sparkles size={14} /> 저장
+                      </PrimaryBtn>
+                      <button onClick={cancelInlineEdit} style={{ fontFamily: FONT, border: "1.5px solid #E5E8EB", background: "#fff", borderRadius: 12, padding: "0 16px", fontWeight: 700, fontSize: 13.5, color: "#6B7684", cursor: "pointer" }}>취소</button>
+                    </div>
+                  </div>
+                ) : (
+                  // ── 보기 모드: 신택스 하이라이팅 적용 ──
+                  <>
+                    {sol.memo && <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "#6B7684", background: "#F7F9FC", borderRadius: 12, padding: "9px 12px" }}>📝 {sol.memo}</p>}
+                    <pre style={{ ...mono, margin: 0, background: "#191F28", color: "#E8F0FE", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}
+                      dangerouslySetInnerHTML={{ __html: highlightCode(sol.code, sol.lang || "cpp") }} />
+                    <ReviewCard review={sol.review} />
+                  </>
+                )}
               </div>
-              {sol.memo && <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "#6B7684", background: "#F7F9FC", borderRadius: 12, padding: "9px 12px" }}>📝 {sol.memo}</p>}
-              <pre style={{ ...mono, margin: 0, background: "#191F28", color: "#E8F0FE", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}>{sol.code}</pre>
-              <ReviewCard review={sol.review} />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -523,6 +760,7 @@ export default function App() {
   const [problems, setProblems] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [levelFilter, setLevelFilter] = useState("all");
   const [view, setView] = useState({ page: "home", id: null });
   const [showAdd, setShowAdd] = useState(false);
   const [showAuth, setShowAuth] = useState(false); // 로그인 화면 모달 표시
@@ -625,7 +863,9 @@ export default function App() {
   }
 
   const current = problems.find((p) => p.id === view.id);
-  const shown = filter === "all" ? problems : problems.filter((p) => p.category === filter);
+  const shown = problems
+    .filter((p) => filter === "all" || p.category === filter)
+    .filter((p) => levelFilter === "all" || p.level === levelFilter);
   const countOf = (id) => problems.filter((p) => p.category === id).length;
 
   return (
@@ -731,10 +971,16 @@ export default function App() {
           </div>
 
           {/* 필터 칩 + 목록 */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
             <Chip active={filter === "all"} color={{ deep: "#191F28" }} onClick={() => setFilter("all")}>전체 {problems.length}</Chip>
             {CATEGORIES.map((c) => (
               <Chip key={c.id} active={filter === c.id} color={c} onClick={() => setFilter(c.id)}>{c.short}</Chip>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <Chip active={levelFilter === "all"} color={{ deep: "#6B7684" }} onClick={() => setLevelFilter("all")}>난이도 전체</Chip>
+            {LEVELS.map((l) => (
+              <Chip key={l.id} active={levelFilter === l.id} color={{ deep: l.color }} onClick={() => setLevelFilter(l.id)}>{l.name}</Chip>
             ))}
           </div>
 
@@ -751,6 +997,7 @@ export default function App() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))", gap: 14 }}>
               {shown.map((p) => {
                 const c = catOf(p.category);
+                const lv = levelOf(p.level);
                 const mine = p.solutions.filter((s) => s.type === "mine").length;
                 const liked = p.solutions.filter((s) => s.type === "others").length;
                 return (
@@ -761,7 +1008,14 @@ export default function App() {
                     onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = `0 14px 30px ${c.deep}28`; }}
                     onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = clay.card.boxShadow; }}
                   >
-                    <CatBadge id={p.category} small />
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <CatBadge id={p.category} small />
+                      {lv && (
+                        <span style={{ fontSize: 11.5, fontWeight: 800, color: lv.color, background: lv.bg, padding: "4px 9px", borderRadius: 999 }}>
+                          {lv.name}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontWeight: 800, fontSize: 15.5, margin: "10px 0 8px", lineHeight: 1.4, color: "#191F28" }}>{p.title}</div>
                     <div style={{ display: "flex", gap: 10, fontSize: 12.5, color: "#8B95A1", fontWeight: 600 }}>
                       <span>🙋 내 풀이 {mine}</span>
