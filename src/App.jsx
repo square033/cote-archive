@@ -311,6 +311,60 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
     onChange(ref.current?.innerHTML || "");
   };
 
+  const [showColor, setShowColor] = useState(false);
+  const [showSize, setShowSize] = useState(false);
+
+  // 글자 색 적용
+  const applyColor = (color) => {
+    document.execCommand("foreColor", false, color);
+    ref.current?.focus();
+    onChange(ref.current?.innerHTML || "");
+    setShowColor(false);
+  };
+
+  // 글자 크기 적용 (execCommand fontSize는 1~7 단계라, 선택 영역을 span으로 감싸 px 직접 지정)
+  const applySize = (px) => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      const span = document.createElement("span");
+      span.style.fontSize = px + "px";
+      try {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        sel.removeAllRanges();
+      } catch (e) { /* 복잡한 선택이면 무시 */ }
+    }
+    ref.current?.focus();
+    onChange(ref.current?.innerHTML || "");
+    setShowSize(false);
+  };
+
+  // 붙여넣은 어두운 배경/색상 싹 제거 (프로그래머스 등에서 복사한 경우)
+  const stripBackground = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.querySelectorAll("*").forEach((node) => {
+      node.style && (node.style.background = "", node.style.backgroundColor = "");
+      // 표 셀이 아닌데 글자색이 밝은(흰색 계열) 경우 색 제거
+      if (node.tagName !== "TD" && node.tagName !== "TH") {
+        node.style && (node.style.color = "");
+      }
+    });
+    // 표는 우리 스타일로 다시 정리
+    el.querySelectorAll("table td, table th").forEach((cell) => {
+      cell.style.color = "#191F28";
+      cell.style.background = "";
+    });
+    el.querySelectorAll("table tr:first-child td, table tr:first-child th").forEach((cell) => {
+      cell.style.background = "#F2F4F6";
+    });
+    onChange(el.innerHTML || "");
+  };
+
+  const COLORS = ["#191F28", "#3182F6", "#1FA97E", "#E8923A", "#E0527A", "#7C5CE0", "#8B95A1"];
+  const SIZES = [{ px: 12, label: "작게" }, { px: 14, label: "보통" }, { px: 17, label: "크게" }, { px: 22, label: "제목" }];
+
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [tRows, setTRows] = useState(2);
   const [tCols, setTCols] = useState(2);
@@ -395,6 +449,51 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("italic")} style={{ ...btn(false), fontStyle: "italic" }} title="기울임">I</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("underline")} style={{ ...btn(false), textDecoration: "underline" }} title="밑줄">U</button>
         <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
+
+        {/* 글자 색 */}
+        <div style={{ position: "relative" }}>
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setShowColor(!showColor); setShowSize(false); }} style={btn(showColor)} title="글자 색">
+            <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 4, background: "linear-gradient(135deg,#3182F6,#E0527A)" }} />
+          </button>
+          {showColor && (
+            <div onMouseDown={(e) => e.preventDefault()} style={{
+              position: "absolute", top: 38, left: 0, zIndex: 20, background: "#fff", borderRadius: 14,
+              boxShadow: "0 10px 30px rgba(100,116,139,0.22)", border: "1px solid #EFF1F4", padding: 12,
+              display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, width: 160,
+            }}>
+              {COLORS.map((col) => (
+                <button key={col} type="button" onClick={() => applyColor(col)} title={col} style={{
+                  width: 28, height: 28, borderRadius: 8, background: col, border: "2px solid #fff",
+                  boxShadow: "0 0 0 1px #E5E8EB", cursor: "pointer",
+                }} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 글자 크기 */}
+        <div style={{ position: "relative" }}>
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setShowSize(!showSize); setShowColor(false); }} style={{ ...btn(showSize), fontSize: 12 }} title="글자 크기">가</button>
+          {showSize && (
+            <div onMouseDown={(e) => e.preventDefault()} style={{
+              position: "absolute", top: 38, left: 0, zIndex: 20, background: "#fff", borderRadius: 14,
+              boxShadow: "0 10px 30px rgba(100,116,139,0.22)", border: "1px solid #EFF1F4", padding: 8, width: 120,
+            }}>
+              {SIZES.map((s) => (
+                <button key={s.px} type="button" onClick={() => applySize(s.px)} style={{
+                  fontFamily: FONT, display: "block", width: "100%", textAlign: "left", border: "none",
+                  background: "transparent", cursor: "pointer", padding: "7px 10px", borderRadius: 8,
+                  fontSize: s.px, color: "#191F28", fontWeight: 600,
+                }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#F2F4F6"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                >{s.label}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyLeft")} style={btn(false)} title="왼쪽 정렬">⬅</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyCenter")} style={btn(false)} title="가운데 정렬">↔</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyRight")} style={btn(false)} title="오른쪽 정렬">➡</button>
@@ -425,7 +524,8 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
           )}
         </div>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertUnorderedList")} style={btn(false)} title="목록">•≡</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("removeFormat")} style={{ ...btn(false), fontSize: 11, fontWeight: 700 }} title="서식 지우기">지움</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={stripBackground} style={{ ...btn(false), fontSize: 11, fontWeight: 700, width: "auto", padding: "0 8px" }} title="붙여넣은 어두운 배경/색 제거">배경정리</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("removeFormat")} style={{ ...btn(false), fontSize: 11, fontWeight: 700, width: "auto", padding: "0 8px" }} title="서식 지우기">서식지움</button>
       </div>
       {/* 편집 영역 — 표 붙여넣기도 그대로 인식 */}
       <div
@@ -440,9 +540,10 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
           const text = e.clipboardData.getData("text/plain");
           e.preventDefault();
           if (html && /<table/i.test(html)) {
-            // 표가 포함된 HTML → 그대로 넣고 스타일 정리
+            // 표가 포함된 HTML → 그대로 넣고 스타일 정리 + 어두운 배경 제거
             document.execCommand("insertHTML", false, html);
             normalizeTables();
+            stripBackground();
           } else {
             // 평문인데 탭으로 구분돼 있으면 표로 자동 변환
             const asTable = tsvToTable(text);
