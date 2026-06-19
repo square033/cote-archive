@@ -19,9 +19,12 @@ const CATEGORIES = [
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.find((c) => c.id === "etc");
 
 const LEVELS = [
+  { id: "lv0", name: "Lv.0", label: "입문", color: "#8B95A1", bg: "#F2F4F6" },
   { id: "lv1", name: "Lv.1", label: "쉬움", color: "#1FA97E", bg: "#E0F7EE" },
-  { id: "lv2", name: "Lv.2", label: "보통", color: "#E8923A", bg: "#FFF1DD" },
-  { id: "lv3", name: "Lv.3", label: "어려움", color: "#E0527A", bg: "#FFE9EF" },
+  { id: "lv2", name: "Lv.2", label: "보통", color: "#3182F6", bg: "#E4F0FF" },
+  { id: "lv3", name: "Lv.3", label: "중상", color: "#7C5CE0", bg: "#EFE9FF" },
+  { id: "lv4", name: "Lv.4", label: "어려움", color: "#E8923A", bg: "#FFF1DD" },
+  { id: "lv5", name: "Lv.5", label: "최상", color: "#E0527A", bg: "#FFE9EF" },
 ];
 const levelOf = (id) => LEVELS.find((l) => l.id === id) || null;
 
@@ -308,12 +311,73 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
     onChange(ref.current?.innerHTML || "");
   };
 
+  const [showTablePicker, setShowTablePicker] = useState(false);
+  const [tRows, setTRows] = useState(2);
+  const [tCols, setTCols] = useState(2);
+
+  // 깔끔한 표 HTML 생성 (헤더행 강조)
+  const buildTable = (rows, cols) => {
+    const cellStyle = "border:1px solid #D8DCE2;padding:7px 11px;font-size:14px;";
+    const headStyle = cellStyle + "background:#F2F4F6;font-weight:700;";
+    let html = `<table style="border-collapse:collapse;width:100%;margin:8px 0;"><tbody>`;
+    for (let r = 0; r < rows; r++) {
+      html += "<tr>";
+      for (let cc = 0; cc < cols; cc++) {
+        html += `<td style="${r === 0 ? headStyle : cellStyle}">${r === 0 ? "제목" + (cc + 1) : ""}</td>`;
+      }
+      html += "</tr>";
+    }
+    html += `</tbody></table><p><br></p>`;
+    return html;
+  };
+
   const insertTable = () => {
-    const html = `<table style="border-collapse:collapse;width:100%;margin:8px 0;"><tbody>
-      <tr><td style="border:1px solid #D8DCE2;padding:6px 10px;">제목1</td><td style="border:1px solid #D8DCE2;padding:6px 10px;">제목2</td></tr>
-      <tr><td style="border:1px solid #D8DCE2;padding:6px 10px;">내용1</td><td style="border:1px solid #D8DCE2;padding:6px 10px;">내용2</td></tr>
-    </tbody></table><p><br></p>`;
-    exec("insertHTML", html);
+    exec("insertHTML", buildTable(tRows, tCols));
+    setShowTablePicker(false);
+  };
+
+  // 표 안의 모든 셀에 우리 스타일을 강제로 입혀서 깔끔하게 정리
+  const normalizeTables = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.querySelectorAll("table").forEach((t) => {
+      t.style.borderCollapse = "collapse";
+      t.style.width = t.style.width || "100%";
+      t.style.margin = "8px 0";
+      t.removeAttribute("border");
+      t.querySelectorAll("td,th").forEach((cell, i) => {
+        cell.style.border = "1px solid #D8DCE2";
+        cell.style.padding = "7px 11px";
+        cell.style.fontSize = "14px";
+      });
+      // 첫 행 헤더 느낌
+      const firstRow = t.querySelector("tr");
+      if (firstRow) firstRow.querySelectorAll("td,th").forEach((cell) => {
+        cell.style.background = "#F2F4F6";
+        cell.style.fontWeight = "700";
+      });
+    });
+  };
+
+  // 탭/줄바꿈으로 구분된 평문(엑셀 복사 등)을 표로 변환
+  const tsvToTable = (text) => {
+    const rows = text.replace(/\r/g, "").split("\n").filter((r) => r.length > 0);
+    if (rows.length < 1) return null;
+    const hasTab = rows.some((r) => r.includes("\t"));
+    if (!hasTab && rows.length < 2) return null; // 표로 보기 어려움
+    const cellStyle = "border:1px solid #D8DCE2;padding:7px 11px;font-size:14px;";
+    const headStyle = cellStyle + "background:#F2F4F6;font-weight:700;";
+    let html = `<table style="border-collapse:collapse;width:100%;margin:8px 0;"><tbody>`;
+    rows.forEach((row, ri) => {
+      const cells = hasTab ? row.split("\t") : [row];
+      html += "<tr>";
+      cells.forEach((cell) => {
+        html += `<td style="${ri === 0 ? headStyle : cellStyle}">${escapeHtml(cell.trim())}</td>`;
+      });
+      html += "</tr>";
+    });
+    html += `</tbody></table><p><br></p>`;
+    return hasTab ? html : null;
   };
 
   const btn = (active) => ({
@@ -335,7 +399,31 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyCenter")} style={btn(false)} title="가운데 정렬">↔</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyRight")} style={btn(false)} title="오른쪽 정렬">➡</button>
         <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={insertTable} style={btn(false)} title="표 삽입">⊞</button>
+        <div style={{ position: "relative" }}>
+          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setShowTablePicker(!showTablePicker)} style={btn(showTablePicker)} title="표 삽입">⊞</button>
+          {showTablePicker && (
+            <div onMouseDown={(e) => e.preventDefault()} style={{
+              position: "absolute", top: 38, left: 0, zIndex: 20, background: "#fff", borderRadius: 14,
+              boxShadow: "0 10px 30px rgba(100,116,139,0.22)", border: "1px solid #EFF1F4", padding: 14, width: 200,
+            }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: "#191F28", marginBottom: 10 }}>표 만들기</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 12.5, color: "#6B7684", width: 28 }}>행</span>
+                <input type="number" min={1} max={20} value={tRows} onChange={(e) => setTRows(Math.max(1, Math.min(20, +e.target.value || 1)))}
+                  style={{ fontFamily: FONT, flex: 1, border: "1.5px solid #E5E8EB", borderRadius: 9, padding: "6px 10px", fontSize: 13, outline: "none" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 12.5, color: "#6B7684", width: 28 }}>열</span>
+                <input type="number" min={1} max={10} value={tCols} onChange={(e) => setTCols(Math.max(1, Math.min(10, +e.target.value || 1)))}
+                  style={{ fontFamily: FONT, flex: 1, border: "1.5px solid #E5E8EB", borderRadius: 9, padding: "6px 10px", fontSize: 13, outline: "none" }} />
+              </div>
+              <button type="button" onClick={insertTable} style={{
+                fontFamily: FONT, width: "100%", border: "none", background: "#3182F6", color: "#fff",
+                borderRadius: 10, padding: "8px 0", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              }}>{tRows} × {tCols} 표 삽입</button>
+            </div>
+          )}
+        </div>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertUnorderedList")} style={btn(false)} title="목록">•≡</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("removeFormat")} style={{ ...btn(false), fontSize: 11, fontWeight: 700 }} title="서식 지우기">지움</button>
       </div>
@@ -348,13 +436,27 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
         onBlur={() => setFocused(false)}
         onInput={(e) => onChange(e.currentTarget.innerHTML)}
         onPaste={(e) => {
-          // 엑셀/표 복사 시 HTML 그대로 붙여넣기 허용 (서식·표 유지)
           const html = e.clipboardData.getData("text/html");
-          if (html) {
-            e.preventDefault();
+          const text = e.clipboardData.getData("text/plain");
+          e.preventDefault();
+          if (html && /<table/i.test(html)) {
+            // 표가 포함된 HTML → 그대로 넣고 스타일 정리
             document.execCommand("insertHTML", false, html);
-            onChange(ref.current?.innerHTML || "");
+            normalizeTables();
+          } else {
+            // 평문인데 탭으로 구분돼 있으면 표로 자동 변환
+            const asTable = tsvToTable(text);
+            if (asTable) {
+              document.execCommand("insertHTML", false, asTable);
+            } else if (html) {
+              document.execCommand("insertHTML", false, html);
+              normalizeTables();
+            } else {
+              // 일반 텍스트 — 줄바꿈 살려서 넣기
+              document.execCommand("insertHTML", false, escapeHtml(text).replace(/\n/g, "<br>"));
+            }
           }
+          onChange(ref.current?.innerHTML || "");
         }}
         data-placeholder={placeholder}
         className="rte-editable"
@@ -428,13 +530,13 @@ function AddModal({ onClose, onSave }) {
           {/* 난이도(레벨) */}
           <div>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8B95A1", marginBottom: 6 }}>난이도</div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {LEVELS.map((l) => (
                 <button key={l.id} onClick={() => setLevel(l.id)} style={{
-                  fontFamily: FONT, flex: 1, padding: "10px 0", borderRadius: 12, fontWeight: 800, fontSize: 13.5, cursor: "pointer",
+                  fontFamily: FONT, flex: "1 1 90px", padding: "9px 0", borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: "pointer",
                   border: level === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
                   background: level === l.id ? l.bg : "#fff", color: level === l.id ? l.color : "#6B7684",
-                }}>{l.name} <span style={{ fontWeight: 600, fontSize: 12 }}>· {l.label}</span></button>
+                }}>{l.name} <span style={{ fontWeight: 600, fontSize: 11.5 }}>· {l.label}</span></button>
               ))}
             </div>
           </div>
@@ -491,7 +593,11 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   const [inlineCode, setInlineCode] = useState("");
   const [inlineMemo, setInlineMemo] = useState("");
   const [inlineLang, setInlineLang] = useState("cpp");
+  const [editingMeta, setEditingMeta] = useState(false); // 카테고리·난이도 편집
   const [err, setErr] = useState("");
+
+  const setCategory = (id) => onUpdate({ ...problem, category: id });
+  const setLevel = (id) => onUpdate({ ...problem, level: id });
 
   const addSolution = () => {
     if (!code.trim()) { setErr("코드를 입력해 주세요."); return; }
@@ -568,15 +674,45 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
       {/* 헤더 카드 */}
       <div style={{ ...clay.card, padding: 24, background: c.grad, border: "1px solid rgba(255,255,255,0.8)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-          <div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <CatBadge id={problem.category} />
               {lv && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: lv.bg, color: lv.color, fontWeight: 800, fontSize: 13, padding: "6px 12px", borderRadius: 999, fontFamily: FONT }}>
                   {lv.name} · {lv.label}
                 </span>
               )}
+              <button onClick={() => setEditingMeta(!editingMeta)} style={{
+                fontFamily: FONT, border: "none", background: "rgba(255,255,255,0.65)", color: "#4E5968",
+                borderRadius: 999, padding: "6px 12px", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
+              }}>{editingMeta ? "닫기" : "✏️ 유형·난이도 변경"}</button>
             </div>
+
+            {editingMeta && (
+              <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 16, padding: 14, marginTop: 12 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: "#6B7684", marginBottom: 6 }}>유형</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                  {CATEGORIES.map((cat) => (
+                    <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
+                      fontFamily: FONT, padding: "6px 12px", borderRadius: 999, fontWeight: 700, fontSize: 12.5, cursor: "pointer",
+                      border: problem.category === cat.id ? `1.5px solid ${cat.deep}` : "1.5px solid #E5E8EB",
+                      background: problem.category === cat.id ? cat.bg : "#fff", color: problem.category === cat.id ? cat.deep : "#8B95A1",
+                    }}>{cat.emoji} {cat.name}</button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: "#6B7684", marginBottom: 6 }}>난이도</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {LEVELS.map((l) => (
+                    <button key={l.id} onClick={() => setLevel(l.id)} style={{
+                      fontFamily: FONT, padding: "6px 12px", borderRadius: 999, fontWeight: 800, fontSize: 12.5, cursor: "pointer",
+                      border: problem.level === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
+                      background: problem.level === l.id ? l.bg : "#fff", color: problem.level === l.id ? l.color : "#8B95A1",
+                    }}>{l.name} · {l.label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <h1 style={{ margin: "12px 0 6px", fontSize: 24, fontWeight: 800, color: "#191F28", lineHeight: 1.3 }}>{problem.title}</h1>
             {problem.aiReason && <p style={{ margin: 0, fontSize: 13, color: c.deep, fontWeight: 600 }}>✨ AI 분류 이유 · {problem.aiReason}</p>}
             {problem.url && (
