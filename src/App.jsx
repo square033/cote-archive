@@ -261,6 +261,44 @@ const KEYWORDS = {
 // HTML 이스케이프
 const escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// 저장된 문제 본문에서 어두운 배경/밝은 글자색을 제거해 밝은 테마로 표시
+// (배경정리 기능 추가 전에 저장된 옛날 문제도 깔끔하게 보이도록)
+function sanitizeBody(html) {
+  if (!html || typeof window === "undefined") return html || "";
+  try {
+    const box = document.createElement("div");
+    box.innerHTML = html;
+    box.querySelectorAll("*").forEach((node) => {
+      if (!node.style) return;
+      // 배경 제거
+      node.style.background = "";
+      node.style.backgroundColor = "";
+      // 표 셀이 아닌 곳의 글자색 제거 (어두운 배경에 맞춰 흰색이던 글자들)
+      if (node.tagName !== "TD" && node.tagName !== "TH") {
+        node.style.color = "";
+      }
+    });
+    // 표는 우리 스타일로 정리
+    box.querySelectorAll("table").forEach((t) => {
+      t.style.borderCollapse = "collapse";
+      t.style.background = "";
+    });
+    box.querySelectorAll("table td, table th").forEach((cell) => {
+      cell.style.color = "#191F28";
+      cell.style.background = "";
+      cell.style.border = "1px solid #D8DCE2";
+      cell.style.padding = "7px 11px";
+    });
+    box.querySelectorAll("table tr:first-child td, table tr:first-child th").forEach((cell) => {
+      cell.style.background = "#F2F4F6";
+      cell.style.fontWeight = "700";
+    });
+    return box.innerHTML;
+  } catch (e) {
+    return html;
+  }
+}
+
 function highlightCode(code, lang) {
   const kws = KEYWORDS[lang] || [];
   const kwSet = new Set(kws);
@@ -853,8 +891,8 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
               </div>
             </div>
           ) : problem.body ? (
-            <div className="rte-editable" style={{ marginTop: 14, fontSize: 14, color: "#4E5968", lineHeight: 1.7 }}
-              dangerouslySetInnerHTML={{ __html: problem.body }} />
+            <div className="rte-editable" style={{ marginTop: 14, fontSize: 14, color: "#4E5968", lineHeight: 1.7, overflowX: "auto" }}
+              dangerouslySetInnerHTML={{ __html: sanitizeBody(problem.body) }} />
           ) : (
             <p style={{ margin: "14px 0 0", color: "#A8B1BD", fontSize: 13.5 }}>아직 문제 내용이 없어요. 수정 버튼으로 작성해 보세요.</p>
           )
@@ -1003,6 +1041,38 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false); // 로그인 화면 모달 표시
   const [syncing, setSyncing] = useState(false);
 
+  // 상세 페이지로 이동 — 브라우저 히스토리에도 쌓아서 뒤로가기가 목록으로 오게 함
+  const openDetail = (id) => {
+    setView({ page: "detail", id });
+    window.history.pushState({ page: "detail", id }, "");
+    window.scrollTo({ top: 0 });
+  };
+  const goHome = () => {
+    setView({ page: "home", id: null });
+    // 히스토리에 detail 항목이 쌓여 있으면 하나 뒤로 (없으면 그냥 상태만 변경)
+    if (window.history.state && window.history.state.page === "detail") {
+      window.history.back();
+    }
+  };
+
+  // 휴대폰/브라우저 자체 뒤로가기 버튼 → 상세에서 목록으로
+  useEffect(() => {
+    // 첫 진입 시 home 상태를 히스토리 베이스로 깔아둠 (뒤로가기가 사이트 밖으로 안 나가게)
+    window.history.replaceState({ page: "home" }, "");
+    const onPop = (e) => {
+      const st = e.state;
+      if (st && st.page === "detail" && st.id) {
+        setView({ page: "detail", id: st.id });
+      } else {
+        setView({ page: "home", id: null });
+      }
+      setShowAdd(false);
+      setShowAuth(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   // 로그인 세션 감시
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -1065,7 +1135,7 @@ export default function App() {
     const next = [p, ...problems];
     setProblems(next);
     setShowAdd(false);
-    setView({ page: "detail", id: p.id });
+    openDetail(p.id);
     await upsertRow(p, next);
   };
   const updateProblem = async (p) => {
@@ -1076,7 +1146,7 @@ export default function App() {
   const deleteProblem = async (id) => {
     const next = problems.filter((x) => x.id !== id);
     setProblems(next);
-    setView({ page: "home", id: null });
+    goHome();
     if (!session) { saveGuest(next); return; }
     const { error } = await supabase.from("problems").delete().eq("id", id);
     if (error) console.error("삭제 실패", error);
@@ -1118,14 +1188,14 @@ export default function App() {
       `}</style>
 
       {/* 상단 바 */}
-      <header style={{ ...clay.glass, position: "sticky", top: 0, zIndex: 40, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={() => setView({ page: "home", id: null })} style={{ fontFamily: FONT, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 12, background: "linear-gradient(135deg,#3182F6,#7C5CE0)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 14px rgba(49,130,246,0.35)" }}>
+      <header style={{ ...clay.glass, position: "sticky", top: 0, zIndex: 40, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <button onClick={goHome} style={{ fontFamily: FONT, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, minWidth: 0, flexShrink: 1 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 12, background: "linear-gradient(135deg,#3182F6,#7C5CE0)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 14px rgba(49,130,246,0.35)", flexShrink: 0 }}>
             <Code2 size={18} color="#fff" />
           </div>
-          <span style={{ fontWeight: 800, fontSize: 17, color: "#191F28" }}>코테 아카이브</span>
+          <span style={{ fontWeight: 800, fontSize: 17, color: "#191F28", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>코테 아카이브</span>
         </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <PrimaryBtn onClick={() => setShowAdd(true)} style={{ padding: "10px 18px", fontSize: 14 }}>
             <Plus size={16} /> 문제 등록
           </PrimaryBtn>
@@ -1175,7 +1245,7 @@ export default function App() {
       )}
 
       {view.page === "detail" && current ? (
-        <div className="rise"><ProblemDetail problem={current} onBack={() => setView({ page: "home", id: null })} onUpdate={updateProblem} onDelete={deleteProblem} /></div>
+        <div className="rise"><ProblemDetail problem={current} onBack={goHome} onUpdate={updateProblem} onDelete={deleteProblem} /></div>
       ) : (
         <main className="rise" style={{ maxWidth: 980, margin: "0 auto", padding: "28px 16px 80px" }}>
           {/* 히어로 */}
@@ -1238,7 +1308,7 @@ export default function App() {
                 const mine = p.solutions.filter((s) => s.type === "mine").length;
                 const liked = p.solutions.filter((s) => s.type === "others").length;
                 return (
-                  <button key={p.id} onClick={() => setView({ page: "detail", id: p.id })} style={{
+                  <button key={p.id} onClick={() => openDetail(p.id)} style={{
                     fontFamily: FONT, textAlign: "left", cursor: "pointer", ...clay.card, padding: 18,
                     transition: "transform .18s, box-shadow .18s",
                   }}
