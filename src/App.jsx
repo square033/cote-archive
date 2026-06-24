@@ -46,7 +46,6 @@ const clay = {
 const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif`;
 
 /* ───────────────────────── API 헬퍼 ───────────────────────── */
-/* ───────────────────────── API 헬퍼 ───────────────────────── */
 async function askAI(prompt) {
   const res = await fetch("/api/ai", {
     method: "POST",
@@ -123,41 +122,35 @@ async function askAI(prompt) {
 }
 
 async function reviewCode(problem, code) {
-  return askAI(
-    `너는 친절하고 꼼꼼한 알고리즘 코드 리뷰어야. 반드시 다음 규칙을 지켜서 제공된 코드를 분석하 반드시 아래의 JSON 포맷 규칙을 완벽히 지켜서 응답해줘.
+  return askAI(`너는 친절하고 꼼꼼한 알고리즘 코드 리뷰어야. 
+반드시 다음 규칙을 지켜서 제공된 코드를 분석하고, 아래의 JSON 포맷 규칙을 완벽히 지켜서 응답해줘.
 
-    ⚠️ [필수 주의사항]
-    1. 결과물은 반드시 JSON 객체 하나만 반환해야 해.
-    2. JSON 내부 속성값(텍스트) 안에 절대 주석 기호(//, /* */)나 큰따옴표(")를 그대로 넣지 마. 큰따옴표가 필요하다면 작은따옴표(')로 대체해줘.
-    3. 줄바꿈을 할 때는 실제 엔터(개행)를 치지 말고 텍스트 내에서 '\\n' 문자로 처리해줘.
-    
-    ⚠️ [최우선 규칙] 
-    - 마크다운 백틱(\`\`\`) 구문이나 "여기 JSON입니다" 같은 앞뒤 설명은 절대 포함하지 마.
-    - 오직 중괄호 '{'로 시작해서 '}'로 끝나는 순수한 JSON 데이터만 출력해.
-    - 텍스트 내부에 큰따옴표(")가 들어간다면 반드시 백슬래시(\\")로 이스케이프 처리를 하거나 작은따옴표(')를 사용해.
-    
-    [문제 제목: ${problem.title}]
-    [유형: ${catOf(problem.category).name}]
-    ${(problem.body || "").slice(0, 1500)}
-    
-    [사용자 풀이 코드]
-    ${code.slice(0, 3500)}
+⚠️ [JSON 작성 절대 규칙 - 위반 시 에러 발생]
+1. 결과물은 반드시 중괄호 '{'로 시작해서 '}'로 끝나는 순수한 JSON 객체 하나만 반환해.
+2. JSON 내부의 Key와 Value 문자열을 감쌀 때만 큰따옴표(")를 사용해.
+3. 텍스트 내용 안(Value 내부)에서는 절대 큰따옴표(")를 그대로 쓰지 마. 강조하고 싶은 단어가 있다면 반드시 작은따옴표(')나 백슬래시 이스케이프(\\")를 사용해. (예: "사용된 '큐' 자료구조" 또는 "사용된 \\"큐\\" 자료구조")
+4. 텍스트 내부에서 줄바꿈이 필요하다면 실제 엔터 키를 치지 말고, 반드시 문장 안에 '\\n' 문자열을 적어줘.
 
-    ⚠️ 중요 규칙: 
-    1. 절대로 설명이나 마크다운(\`\`\`)을 붙이지 말고, 오직 { ... } 형태의 순수한 JSON 데이터로만 출력해.
-    2. 텍스트 내부에 큰따옴표(")를 써야 한다면 반드시 백슬래시(\\")로 이스케이프를 하거나 작은따옴표(')를 사용해.
-    
-    [응답할 JSON 포맷]
-    {
-      "summary": "풀이 한 줄 요약",
-      "algorithm": "사용된 핵심 알고리즘/자료구조",
-      "timeComplexity": "시간 복잡도 (예: O(N))",
-      "spaceComplexity": "공간 복잡도",
-      "formula": "핵심 수식이나 점화식 (없으면 null)",
-      "steps": [{"name":"단계 이름","desc":"이 단계에서 코드가 하는 일"}],
-      "goodPoints": ["잘한 점 1", "잘한 점 2"],
-      "improvements": ["개선 아이디어 1", "개선 아이디어 2"]
-    }`
+[문제 제목: ${problem.title}]
+[유형: ${catOf(problem.category).name}]
+${(problem.body || "").slice(0, 1500)}
+
+[사용자 풀이 코드]
+${code.slice(0, 3500)}
+
+[응답할 JSON 포맷 예시 - 이 구조를 그대로 따를 것]
+{
+  "summary": "풀이 한 줄 요약 (텍스트 안에 쌍따옴표 금지)",
+  "algorithm": "사용된 핵심 알고리즘/자료구조",
+  "timeComplexity": "O(N)",
+  "spaceComplexity": "O(N)",
+  "formula": null,
+  "steps": [
+    {"name": "단계 이름", "desc": "설명 작성 시 쌍따옴표 대신 작은따옴표 사용할 것"}
+  ],
+  "goodPoints": ["잘한 점 1", "잘한 점 2"],
+  "improvements": ["개선 아이디어 1"]
+}`
   );
 }
 
