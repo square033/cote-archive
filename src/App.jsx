@@ -55,6 +55,36 @@ const clay = {
 
 const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif`;
 
+/* ───────────────────────── API 헬퍼 1 ───────────────────────── */
+async function classifyProblem(title, body) {
+  return askAI(`너는 알고리즘 문제 분류 전문가야. 다음 문제를 분석해서 가장 적절한 카테고리를 JSON으로 리턴해줘.
+
+[대분류 규칙]
+- dfs, dnc, bin, greedy, dp 중 하나로 분류해.
+- 만약 위 5개에 전혀 해당하지 않는다면 무조건 'etc'로 분류해.
+
+⚠️ [중분류 규칙 - 대분류가 'etc'일 때만 적용]
+대분류가 'etc'라면, 다음 중분류 ID 중 가장 적절한 하나를 골라 'subCategory' 필드에 채워줘:
+- 'hash' (해시, 맵, 셋)
+- 'stack_queue' (스택, 큐)
+- 'heap' (힙, 우선순위 큐)
+- 'sort' (정렬)
+- 'graph' (그래프 최단거리, 위상정렬, 트리스패닝 등)
+- 'sub_etc' (위의 어느 것도 해당하지 않는 기타)
+* 대분류가 'etc'가 아니라면 'subCategory'는 null로 해줘.
+
+[응답 포맷 예시]
+{
+  "category": "etc",
+  "subCategory": "stack_queue",
+  "reason": "큐 자료구조를 이용해 순서대로 처리해야 하는 시뮬레이션 문제입니다."
+}
+
+[문제 제목] ${title}
+[문제 내용] ${body.slice(0, 2000)}`
+  );
+}
+
 /* ───────────────────────── API 헬퍼 ───────────────────────── */
 async function askAI(prompt) {
   const res = await fetch("/api/ai", {
@@ -702,7 +732,8 @@ function AddModal({ onClose, onSave }) {
 
   const save = async () => {
     if (!title.trim()) { setErr("문제 제목을 입력해 주세요."); return; }
-    setErr(""); setBusy(true);
+    setErr("");
+    setBusy(true);
     try {
       let category = manualCat, reason = "";
       const plainBody = body.replace(/<[^>]+>/g, " ").trim(); // AI 분류용 텍스트만 추출
@@ -710,8 +741,13 @@ function AddModal({ onClose, onSave }) {
         if (!plainBody) { setErr("AI 분류를 쓰려면 문제 내용을 입력해 주세요."); setBusy(false); return; }
         const r = await classifyProblem(title, plainBody);
         category = CATEGORIES.some((c) => c.id === r.category) ? r.category : "etc";
+        subCategory = category === "etc" ? (r.subCategory || "sub_etc") : null;
         reason = r.reason || "";
+      } else {
+        // 직접 선택(manual) 모드일 때
+        subCategory = category === "etc" ? manualSubCat : null;
       }
+      
       onSave({
         id: "p" + Date.now(), title: title.trim(), url: url.trim(), body: body.trim(), level,
         category: mode === "manual" ? manualCat : category, subCategory: (mode === "manual" ? manualCat : category) === "etc" ? manualSubCat : null,
