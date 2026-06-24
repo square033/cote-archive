@@ -18,16 +18,6 @@ const CATEGORIES = [
 ];
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.find((c) => c.id === "etc");
 
-const SUB_CATEGORIES = [
-  { id: "hash", name: "해시" },
-  { id: "stack_queue", name: "스택/큐" },
-  { id: "heap", name: "힙" },
-  { id: "sort", name: "정렬" },
-  { id: "graph", name: "그래프" },
-  { id: "sub_etc", name: "기타" },
-];
-const subCatOf = (id) => SUB_CATEGORIES.find((s) => s.id === id) || { id: "sub_etc", name: "기타" };
-
 const LEVELS = [
   { id: "lv0", name: "Lv.0", label: "입문", color: "#8B95A1", bg: "#F2F4F6" },
   { id: "lv1", name: "Lv.1", label: "쉬움", color: "#1FA97E", bg: "#E0F7EE" },
@@ -54,36 +44,6 @@ const clay = {
 };
 
 const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif`;
-
-/* ───────────────────────── API 헬퍼 1 ───────────────────────── */
-async function classifyProblem(title, body) {
-  return askAI(`너는 알고리즘 문제 분류 전문가야. 다음 문제를 분석해서 가장 적절한 카테고리를 JSON으로 리턴해줘.
-
-[대분류 규칙]
-- dfs, dnc, bin, greedy, dp 중 하나로 분류해.
-- 만약 위 5개에 전혀 해당하지 않는다면 무조건 'etc'로 분류해.
-
-⚠️ [중분류 규칙 - 대분류가 'etc'일 때만 적용]
-대분류가 'etc'라면, 다음 중분류 ID 중 가장 적절한 하나를 골라 'subCategory' 필드에 채워줘:
-- 'hash' (해시, 맵, 셋)
-- 'stack_queue' (스택, 큐)
-- 'heap' (힙, 우선순위 큐)
-- 'sort' (정렬)
-- 'graph' (그래프 최단거리, 위상정렬, 트리스패닝 등)
-- 'sub_etc' (위의 어느 것도 해당하지 않는 기타)
-* 대분류가 'etc'가 아니라면 'subCategory'는 null로 해줘.
-
-[응답 포맷 예시]
-{
-  "category": "etc",
-  "subCategory": "stack_queue",
-  "reason": "큐 자료구조를 이용해 순서대로 처리해야 하는 시뮬레이션 문제입니다."
-}
-
-[문제 제목] ${title}
-[문제 내용] ${body.slice(0, 2000)}`
-  );
-}
 
 /* ───────────────────────── API 헬퍼 ───────────────────────── */
 async function askAI(prompt) {
@@ -214,25 +174,16 @@ function Chip({ active, color, children, onClick }) {
   );
 }
 
-function CatBadge({ id, subId, small }) {
+function CatBadge({ id, small }) {
   const c = catOf(id);
-  const sub = subId ? subCatOf(subId) : null;
-  
   return (
     <span style={{
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 5,
-      background: c.bg,
-      color: c.deep,
-      fontWeight: 700,
-      fontSize: small ? 12 : 13,
-      padding: small ? "4px 10px" : "6px 12px",
-      borderRadius: 999,
-      fontFamily: FONT,
+      display: "inline-flex", alignItems: "center", gap: 5,
+      background: c.bg, color: c.deep, fontWeight: 700,
+      fontSize: small ? 12 : 13, padding: small ? "4px 10px" : "6px 12px",
+      borderRadius: 999, fontFamily: FONT,
     }}>
-      <span>{c.emoji}</span>
-      {c.name} {sub ? ` (${sub.name})` : ""} {/* 👈 etc (스택/큐) 형태로 출력 */}
+      <span>{c.emoji}</span>{c.name}
     </span>
   );
 }
@@ -719,149 +670,102 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
   );
 }
 
-/* ───────────────────────── 새 문제 등록 모달 ───────────────────────── */
-
-function AddModal({ onSave, onClose }) {
-  const SUB_CATEGORIES = [
-    { id: "hash", name: "해시" },
-    { id: "stack_queue", name: "스택/큐" },
-    { id: "heap", name: "힙" },
-    { id: "sort", name: "정렬" },
-    { id: "graph", name: "그래프" },
-    { id: "sub_etc", name: "기타" },
-  ];
-
+function AddModal({ onClose, onSave }) {
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [body, setBody] = useState("");
-  const [level, setLevel] = useState(1);
   const [mode, setMode] = useState("ai"); // ai | manual
-  const [manualCat, setManualCat] = useState("etc");
-  const [manualSubCat, setManualSubCat] = useState("sub_etc"); // 💡 중분류 상태 안전하게 선언
+  const [manualCat, setManualCat] = useState("dfs");
+  const [level, setLevel] = useState("lv1");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   const save = async () => {
-    if (!title.trim()) {
-      setErr("문제 제목을 입력해 주세요.");
-      return;
-    }
-    setErr("");
-    setBusy(true);
-
+    if (!title.trim()) { setErr("문제 제목을 입력해 주세요."); return; }
+    setErr(""); setBusy(true);
     try {
-      let finalCategory = manualCat;
-      let finalSubCategory = null;
-      let reason = "";
-
-      const plainBody = body.replace(/<[^>]+>/g, " ").trim();
-
+      let category = manualCat, reason = "";
+      const plainBody = body.replace(/<[^>]+>/g, " ").trim(); // AI 분류용 텍스트만 추출
       if (mode === "ai") {
-        if (!plainBody) {
-          setErr("AI 분류를 쓰려면 문제 내용을 입력해 주세요.");
-          setBusy(false);
-          return;
-        }
+        if (!plainBody) { setErr("AI 분류를 쓰려면 문제 내용을 입력해 주세요."); setBusy(false); return; }
         const r = await classifyProblem(title, plainBody);
-        finalCategory = CATEGORIES.some((c) => c.id === r.category) ? r.category : "etc";
-        finalSubCategory = finalCategory === "etc" ? (r.subCategory || "sub_etc") : null;
+        category = CATEGORIES.some((c) => c.id === r.category) ? r.category : "etc";
         reason = r.reason || "";
-      } else {
-        // 직접 선택 모드
-        finalSubCategory = finalCategory === "etc" ? manualSubCat : null;
       }
-
       onSave({
-        id: "p" + Date.now(),
-        title: title.trim(),
-        url: url.trim(),
-        body: body.trim(),
-        level,
-        category: finalCategory,
-        subCategory: finalSubCategory,
-        aiReason: reason,
-        createdAt: Date.now(),
-        solutions: [],
+        id: "p" + Date.now(), title: title.trim(), url: url.trim(), body: body.trim(),
+        category, level, aiReason: reason, createdAt: Date.now(), solutions: [],
       });
     } catch (e) {
-      console.error("등록 오류:", e);
       setErr("AI 분류에 실패했어요. 잠시 후 다시 시도하거나 직접 선택해 주세요.");
       setBusy(false);
     }
   };
 
+  const input = { fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 14, padding: "12px 14px", fontSize: 14.5, outline: "none", background: "#FAFBFC", color: "#191F28" };
+
   return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 24, width: "100%", maxWidth: 540, padding: 24, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.12)", boxSizing: "border-box" }}>
-        
-        <div style={{ display: "flex", justifyContent: "between", alignItems: "center", marginBottom: 20 }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(25,31,40,0.45)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...clay.card, width: "100%", maxWidth: 620, maxHeight: "90vh", overflowY: "auto", padding: 24, borderRadius: 28 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#191F28" }}>새 문제 등록</h2>
+          <button onClick={onClose} style={{ border: "none", background: "#F2F4F6", borderRadius: 999, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} color="#6B7684" /></button>
         </div>
 
-        {err && <div style={{ background: "#FEEBEE", color: "#F44336", padding: "10px 14px", borderRadius: 12, fontSize: 13, fontWeight: 600, marginBottom: 16 }}>{err}</div>}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#4E5968", marginBottom: 6 }}>문제 제목</label>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 두 큐 합 같게 만들기" style={{ width: "100%", border: "1px solid #E5E8EB", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: FONT, boxSizing: "border-box" }} />
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <input style={input} placeholder="문제 제목 (예: 네트워크 — 프로그래머스 Lv.3)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input style={input} placeholder="문제 링크 (선택)" value={url} onChange={(e) => setUrl(e.target.value)} />
 
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#4E5968", marginBottom: 6 }}>문제 링크 (선택)</label>
-            <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://school.programmers.co.kr/..." style={{ width: "100%", border: "1px solid #E5E8EB", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: FONT, boxSizing: "border-box" }} />
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8B95A1", marginBottom: 6 }}>
+              문제 내용 — 굵게·정렬·표 사용 가능, 엑셀/표 복사 붙여넣기도 인식돼요
+            </div>
+            <RichTextEditor value={body} onChange={setBody} placeholder="문제 내용을 작성하거나 붙여넣어 주세요. AI가 이 내용을 보고 유형을 분류해요." minHeight={150} />
           </div>
 
-          <div style={{ display: "flex", gap: 16 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#4E5968", marginBottom: 6 }}>난이도 (Level)</label>
-              <select value={level} onChange={(e) => setLevel(Number(e.target.value))} style={{ width: "100%", border: "1px solid #E5E8EB", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: FONT, background: "#fff" }}>
-                {[1, 2, 3, 4, 5].map((l) => <option key={l} value={l}>Level {l}</option>)}
-              </select>
+          {/* 난이도(레벨) */}
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8B95A1", marginBottom: 6 }}>난이도</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {LEVELS.map((l) => (
+                <button key={l.id} onClick={() => setLevel(l.id)} style={{
+                  fontFamily: FONT, flex: "1 1 90px", padding: "9px 0", borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: "pointer",
+                  border: level === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
+                  background: level === l.id ? l.bg : "#fff", color: level === l.id ? l.color : "#6B7684",
+                }}>{l.name} <span style={{ fontWeight: 600, fontSize: 11.5 }}>· {l.label}</span></button>
+              ))}
             </div>
           </div>
 
-          <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#4E5968", marginBottom: 6 }}>문제 내용 / 지문</label>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="여기에 문제 지문을 복사해 붙여넣으세요. AI 자동 분류와 코드 리뷰의 바탕이 됩니다." style={{ width: "100%", height: 140, border: "1px solid #E5E8EB", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: FONT, resize: "none", boxSizing: "border-box" }} />
-          </div>
-
-          {/* 분류 방식 패널 */}
+          {/* 분류 방식 */}
           <div style={{ background: "#F7F9FC", borderRadius: 18, padding: 14 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button type="button" onClick={() => setMode("ai")} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "none", background: mode === "ai" ? "#fff" : "transparent", boxShadow: mode === "ai" ? "0 2px 8px rgba(0,0,0,0.08)" : "none", fontSize: 13, fontWeight: 700, color: mode === "ai" ? "#3182F6" : "#6B7684", cursor: "pointer" }}>AI 자동 분류</button>
-              <button type="button" onClick={() => setMode("manual")} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "none", background: mode === "manual" ? "#fff" : "transparent", boxShadow: mode === "manual" ? "0 2px 8px rgba(0,0,0,0.08)" : "none", fontSize: 13, fontWeight: 700, color: mode === "manual" ? "#3182F6" : "#6B7684", cursor: "pointer" }}>직접 선택</button>
+              {[["ai", "AI 자동 분류", <Wand2 size={15} key="w" />], ["manual", "직접 선택", <BookOpen size={15} key="b" />]].map(([m, label, icon]) => (
+                <button key={m} onClick={() => setMode(m)} style={{
+                  fontFamily: FONT, flex: 1, padding: "10px 0", borderRadius: 12, fontWeight: 700, fontSize: 14, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .15s",
+                  border: mode === m ? "1.5px solid #3182F6" : "1.5px solid #E5E8EB",
+                  background: mode === m ? "#E4F0FF" : "#fff", color: mode === m ? "#3182F6" : "#6B7684",
+                }}>{icon}{label}</button>
+              ))}
             </div>
-
             {mode === "ai" ? (
               <p style={{ margin: 0, fontSize: 13, color: "#6B7684", lineHeight: 1.5 }}>등록 버튼을 누르면 문제 내용을 분석해 6가지 유형 중 하나로 자동 분류해요. ✨</p>
             ) : (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {CATEGORIES.map((c) => (
-                  <button key={c.id} type="button" onClick={() => setManualCat(c.id)} style={{ fontFamily: FONT, fontSize: 13, padding: "6px 12px", borderRadius: 8, cursor: "pointer", border: manualCat === c.id ? `1.5px solid ${c.deep}` : "1.5px solid #E5E8EB", background: manualCat === c.id ? c.bg : "#fff", color: c.deep }}>{c.emoji} {c.name}</button>
+                  <Chip key={c.id} active={manualCat === c.id} color={c} onClick={() => setManualCat(c.id)}>{c.emoji} {c.name}</Chip>
                 ))}
-              </div>
-            )}
-
-            {/* 대분류가 '기타(etc)'일 때만 중분류 선택창 표시 */}
-            {(mode === "manual" ? manualCat === "etc" : true) && (
-              <div style={{ marginTop: 10, padding: 12, background: "#F2F4F6", borderRadius: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#4E5968", marginBottom: 8 }}>기타 세부 유형 (중분류)</div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {SUB_CATEGORIES.map((sub) => (
-                    <button key={sub.id} type="button" onClick={() => setManualSubCat(sub.id)} style={{ fontFamily: FONT, fontSize: 13, padding: "6px 12px", borderRadius: 8, cursor: "pointer", border: manualSubCat === sub.id ? "1.5px solid #6B7684" : "1.5px solid #E5E8EB", background: manualSubCat === sub.id ? "#6B7684" : "#fff", color: manualSubCat === sub.id ? "#fff" : "#4E5968" }}>{sub.name}</button>
-                  ))}
-                </div>
               </div>
             )}
           </div>
 
-        </div>
+          {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600 }}><TriangleAlert size={15} />{err}</div>}
 
-        <div style={{ display: "flex", gap: 12 }}>
-          <button onClick={onClose} disabled={busy} style={{ flex: 1, padding: "14px", border: "1px solid #E5E8EB", borderRadius: 14, fontSize: 15, fontWeight: 700, color: "#4E5968", background: "#fff", cursor: "pointer" }}>취소</button>
-          <button onClick={save} disabled={busy} style={{ flex: 2, padding: "14px", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 700, color: "#fff", background: busy ? "#E5E8EB" : "#3182F6", cursor: busy ? "not-allowed" : "pointer" }}>{busy ? "분석 중..." : "등록하기"}</button>
+          <PrimaryBtn onClick={save} disabled={busy} style={{ justifyContent: "center" }}>
+            {busy ? (<><Loader2 size={17} className="spin" /> AI가 유형을 분류하는 중…</>) : (<><Plus size={17} /> 문제 등록하기</>)}
+          </PrimaryBtn>
         </div>
-
       </div>
     </div>
   );
@@ -887,8 +791,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   const [inlineLang, setInlineLang] = useState("cpp");
   const [editingMeta, setEditingMeta] = useState(false); // 카테고리·난이도 편집
   const [err, setErr] = useState("");
-  const [manualSubCat, setManualSubCat] = useState("sub_etc");
-  
+
   const setCategory = (id) => onUpdate({ ...problem, category: id });
   const setLevel = (id) => onUpdate({ ...problem, level: id });
 
@@ -972,7 +875,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <CatBadge id={problem.category} subId={problem.subCategory} />
+              <CatBadge id={problem.category} />
               {lv && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: lv.bg, color: lv.color, fontWeight: 800, fontSize: 13, padding: "6px 12px", borderRadius: 999, fontFamily: FONT }}>
                   {lv.name} · {lv.label}
@@ -1491,7 +1394,7 @@ export default function App() {
                     onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = clay.card.boxShadow; }}
                   >
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <CatBadge id={p.category} subId={p.subCategory} small />
+                      <CatBadge id={p.category} small />
                       {lv && (
                         <span style={{ fontSize: 11.5, fontWeight: 800, color: lv.color, background: lv.bg, padding: "4px 9px", borderRadius: 999 }}>
                           {lv.name}
