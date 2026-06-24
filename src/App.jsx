@@ -46,7 +46,6 @@ const clay = {
 const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif`;
 
 /* ───────────────────────── API 헬퍼 ───────────────────────── */
-
 async function askAI(prompt) {
   const res = await fetch("/api/ai", {
     method: "POST",
@@ -75,15 +74,42 @@ async function askAI(prompt) {
         .replace(/\r/g, "\\r")
         .replace(/\t/g, "\\t");
 
-      // 깨진 괄호 쌍 보정
+      // 연속된 공백 및 줄바꿈 깨짐 방지
+      cleanedText = cleanedText.replace(/[\u0000-\u0019]+/g, ""); 
+
       if (!cleanedText.startsWith("{")) cleanedText = cleanedText.substring(cleanedText.indexOf("{"));
       if (!cleanedText.endsWith("}")) cleanedText = cleanedText.substring(0, cleanedText.lastIndexOf("}") + 1);
 
       return JSON.parse(cleanedText);
     } catch (secondError) {
+      console.error("2차 파싱 실패, 정규식 수동 복구 시도");
+      
+      // 3. 정괄호/따옴표가 심하게 깨졌을 때 핵심 데이터만 정규식으로 강제 추출 (try 위치 교정)
+      try {
+        const summaryMatch = text.match(/"summary"\s*:\s*"([^"]+)"/);
+        const algoMatch = text.match(/"algorithm"\s*:\s*"([^"]+)"/);
+        const timeMatch = text.match(/"timeComplexity"\s*:\s*"([^"]+)"/);
+        const spaceMatch = text.match(/"spaceComplexity"\s*:\s*"([^"]+)"/);
+        
+        if (summaryMatch || algoMatch) {
+          return {
+            "summary": summaryMatch ? summaryMatch[1] : "코드를 분석했으나 형식 정제가 필요합니다.",
+            "algorithm": algoMatch ? algoMatch[1] : "분석 완료",
+            "timeComplexity": timeMatch ? timeMatch[1] : "-",
+            "spaceComplexity": spaceMatch ? spaceMatch[1] : "-",
+            "formula": null,
+            "steps": [],
+            "goodPoints": ["AI 응답 형식이 일부 깨졌으나 내용을 수동 복구했습니다."],
+            "improvements": []
+          };
+        }
+      } catch (e) { 
+        console.error("정규식 파싱마저 실패:", e);
+      }
+
       console.error("최종 파싱 실패 원본:", text);
       
-      // [중요] ReviewCard 컴포넌트의 영문 Key(goodPoints, improvements 등)와 완벽히 일치시킴
+      // 완벽히 먹통일 때 띄워줄 최종 Fallback
       return {
         "summary": "AI 응답 데이터에 특수문자나 형식 오류가 섞여 파싱에 실패했습니다. 다시 시도해 주세요.",
         "algorithm": "알 수 없음",
