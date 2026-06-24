@@ -1004,22 +1004,10 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                     <div style={{ marginBottom: 8 }}>{langPicker(inlineLang, setInlineLang)}</div>
                     <textarea value={inlineCode} onChange={(e) => setInlineCode(e.target.value)} spellCheck={false}
                       style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 200, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, outline: "none" }} />
-                    <textarea value={inlineMemo} onChange={(e) => setInlineMemo(e.target.value)} placeholder="메모 (선택)" 
-                      style={{ 
-                        fontFamily: FONT, 
-                        width: "100%", 
-                        boxSizing: "border-box", 
-                        border: "1.5px solid #E5E8EB", 
-                        borderRadius: 12, 
-                        padding: "10px 13px", 
-                        fontSize: 13.5, 
-                        outline: "none", 
-                        margin: "10px 0", 
-                        background: "#FAFBFC",
-                        resize: "vertical",
-                        minHeight: "60px"
-                      }} 
-                    />
+                    <textarea 
+                      value={inlineMemo} 
+                      onChange={(e) => setInlineMemo(e.target.value)} 
+                      placeholder="메모 (선택)"                     
                       style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 12, padding: "10px 13px", fontSize: 13.5, outline: "none", margin: "10px 0", background: "#FAFBFC" }} />
                     <div style={{ display: "flex", gap: 8 }}>
                       <PrimaryBtn onClick={() => saveInlineEdit(sol.id)} color="#1FA97E" style={{ padding: "10px 18px", fontSize: 13.5 }}>
