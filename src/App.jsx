@@ -59,16 +59,17 @@ const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFo
 
 /* ───────────────────────── API 헬퍼 ───────────────────────── */
 
-async function askAI(prompt) {
+async function askAI(prompt, maxTokens = 4096) {
   const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, max_tokens: maxTokens }),
   });
 
   if (!res.ok) throw new Error("API 호출 실패");
   const data = await res.json();
   let text = (data.text || "").trim();
+  if (data.truncated) console.warn("⚠️ AI 응답이 토큰 한도로 잘렸어요. max_tokens를 더 늘려야 할 수 있습니다.");
 
   // 1. Gemini가 간혹 앞뒤에 백틱(```json)을 붙여주는 경우를 대비해 순수 JSON 영역 추출
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -180,7 +181,8 @@ ${code.slice(0, 3500)}
   ],
   "goodPoints": ["잘한 점 1", "잘한 점 2"],
   "improvements": ["개선 아이디어 1"]
-}`
+}`,
+    6144 // 코드 리뷰는 응답이 길어서 토큰을 넉넉히
   );
 }
 
@@ -236,6 +238,48 @@ function PrimaryBtn({ children, onClick, disabled, color = "#3182F6", style }) {
     >
       {children}
     </button>
+  );
+}
+
+/* ───────────────────────── 메모 렌더링 (코드 블록 인식) ───────────────────────── */
+// 메모 안에서 ```...``` 은 코드 블록, `...` 은 인라인 코드로 표시
+function MemoView({ text }) {
+  const mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  // ``` 기준으로 코드블록/일반텍스트 번갈아 분리
+  const blocks = text.split(/```/);
+  return (
+    <div style={{ margin: "0 0 10px", background: "#F7F9FC", borderRadius: 12, padding: "10px 12px" }}>
+      <div style={{ fontSize: 13.5, color: "#6B7684" }}>
+        <span style={{ marginRight: 4 }}>📝</span>
+        {blocks.map((block, i) => {
+          if (i % 2 === 1) {
+            // 홀수 인덱스 = 코드 블록. 첫 줄이 언어명일 수 있으니 제거
+            const lines = block.replace(/^\n/, "").split("\n");
+            const first = (lines[0] || "").trim();
+            const knownLang = ["cpp", "c", "java", "python", "js", "javascript", "py"].includes(first.toLowerCase());
+            const codeBody = knownLang ? lines.slice(1).join("\n") : block.replace(/^\n/, "");
+            return (
+              <pre key={i} style={{
+                fontFamily: mono, margin: "8px 0", background: "#191F28", color: "#E8F0FE",
+                borderRadius: 10, padding: "12px 14px", fontSize: 12.5, lineHeight: 1.55, overflowX: "auto",
+                whiteSpace: "pre",
+              }}>{codeBody.replace(/\n$/, "")}</pre>
+            );
+          }
+          // 짝수 인덱스 = 일반 텍스트. 인라인 `코드` 처리 + 줄바꿈 유지
+          const parts = block.split(/`/);
+          return (
+            <span key={i} style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+              {parts.map((part, j) =>
+                j % 2 === 1
+                  ? <code key={j} style={{ fontFamily: mono, background: "#E8EAED", color: "#D6336C", borderRadius: 5, padding: "1px 5px", fontSize: 12.5 }}>{part}</code>
+                  : <span key={j}>{part}</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1051,7 +1095,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
           placeholder={"// 여기에 코드를 작성하거나 붙여넣어 주세요\n#include <bits/stdc++.h>\nusing namespace std;"}
           style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 220, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 16, padding: 16, fontSize: 13.5, lineHeight: 1.65, outline: "none" }} />
 
-        <textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모 (선택) — 이 풀이에서 배운 점, 패턴 등"
+        <textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모 (선택) — 배운 점·패턴 등. 코드는 ```로 감싸면 코드 블록으로, `한 단어`는 인라인 코드로 보여요"
           style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 14, padding: "11px 14px", fontSize: 14, outline: "none", margin: "10px 0", background: "#FAFBFC", resize: "vertical", minHeight: "60px" }} />
 
         {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}><TriangleAlert size={15} />{err}</div>}
@@ -1114,8 +1158,8 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                     <div style={{ marginBottom: 8 }}>{langPicker(inlineLang, setInlineLang)}</div>
                     <textarea value={inlineCode} onChange={(e) => setInlineCode(e.target.value)} spellCheck={false}
                       style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 200, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, outline: "none" }} />
-                    <input value={inlineMemo} onChange={(e) => setInlineMemo(e.target.value)} placeholder="메모 (선택)"
-                      style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 12, padding: "10px 13px", fontSize: 13.5, outline: "none", margin: "10px 0", background: "#FAFBFC" }} />
+                    <textarea value={inlineMemo} onChange={(e) => setInlineMemo(e.target.value)} placeholder="메모 (선택) — 줄바꿈 가능, 코드는 ```로 감싸면 코드 블록으로 보여요"
+                      style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 12, padding: "10px 13px", fontSize: 13.5, outline: "none", margin: "10px 0", background: "#FAFBFC", resize: "vertical", minHeight: "60px", lineHeight: 1.6 }} />
                     <div style={{ display: "flex", gap: 8 }}>
                       <PrimaryBtn onClick={() => saveInlineEdit(sol.id)} color="#1FA97E" style={{ padding: "10px 18px", fontSize: 13.5 }}>
                         <Sparkles size={14} /> 저장
@@ -1126,7 +1170,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                 ) : (
                   // ── 보기 모드: 신택스 하이라이팅 적용 ──
                   <>
-                    {sol.memo && <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "#6B7684", background: "#F7F9FC", borderRadius: 12, padding: "9px 12px" }}>📝 {sol.memo}</p>}
+                    {sol.memo && <MemoView text={sol.memo} />}
                     <pre style={{ ...mono, margin: 0, background: "#191F28", color: "#E8F0FE", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}
                       dangerouslySetInnerHTML={{ __html: highlightCode(sol.code, sol.lang || "cpp") }} />
                     <ReviewCard review={sol.review} />
