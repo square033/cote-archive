@@ -1491,7 +1491,7 @@ export default function App() {
                     onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = clay.card.boxShadow; }}
                   >
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <CatBadge id={problem.category} subId={problem.subCategory} small />
+                      <CatBadge id={p.category} subId={p.subCategory} small />
                       {lv && (
                         <span style={{ fontSize: 11.5, fontWeight: 800, color: lv.color, background: lv.bg, padding: "4px 9px", borderRadius: 999 }}>
                           {lv.name}
