@@ -735,7 +735,7 @@ function AddModal({ onClose, onSave }) {
     setErr("");
     setBusy(true);
     try {
-      let category = manualCat, reason = "";
+      let category = manualCat, subCategory = null, reason = "";
       const plainBody = body.replace(/<[^>]+>/g, " ").trim(); // AI 분류용 텍스트만 추출
       if (mode === "ai") {
         if (!plainBody) { setErr("AI 분류를 쓰려면 문제 내용을 입력해 주세요."); setBusy(false); return; }
