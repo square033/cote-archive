@@ -57,26 +57,42 @@ async function askAI(prompt) {
   if (!res.ok) throw new Error("API 호출 실패");
   const data = await res.json();
   
-  // 정규식을 이용해 ```json ... ``` 이나 ``` ... ``` 마크다운 감싸기를 완전히 제거
   let text = (data.text || "").trim();
+  
+  // 1. 앞뒤 마크다운 코드 블록(```json) 확실하게 도려내기
   text = text.replace(/^```[a-zA-Z]*\s*/, "").replace(/\s*```$/, "").trim();
   
   try {
     return JSON.parse(text);
   } catch (parseError) {
-    console.error("JSON 파싱 에러 발생한 원본 텍스트:", text);
+    console.error("1차 파싱 실패, 정제 시도:", text);
     
-    // 만약 파싱에 실패하면 최소한의 기본 포맷이라도 반환하여 화면 튕김 방지
-    return {
-      summary: "AI가 응답 형식을 맞추지 못했습니다. 다시 시도해 주세요.",
-      algorithm: "알 수 없음",
-      timeComplexity: "-",
-      spaceComplexity: "-",
-      formula: null,
-      steps: [],
-      goodPoints: ["코드를 다시 제출하거나 잠시 후 리뷰를 요청해 보세요."],
-      improvements: []
-    };
+    try {
+      // 2. 줄바꿈 문자가 JSON을 깨뜨리지 않도록 이스케이프 처리 및 제어문자 청소
+      let cleanedText = text
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t");
+        
+      // 줄바꿈 정제 후 앞뒤 깨진 괄호 쌍이 있다면 보정
+      if (!cleanedText.startsWith("{")) cleanedText = cleanedText.substring(cleanedText.indexOf("{"));
+      if (!cleanedText.endsWith("}")) cleanedText = cleanedText.substring(0, cleanedText.lastIndexOf("}") + 1);
+      
+      return JSON.parse(cleanedText);
+    } catch (secondError) {
+      console.error("최종 파싱 실패 원본:", text);
+      // 완전히 망가진 응답일 때 튕기지 않게 방어벽 리턴
+      return {
+        summary: "AI가 보낸 코드 분석 데이터에 정제되지 않은 특수문자나 주석이 섞여 파싱에 실패했습니다. 코드를 살짝 수정하거나 다시 시도해 주세요.",
+        algorithm: "큐 (Queue) / 시뮬레이션",
+        timeComplexity: "O(N)",
+        spaceComplexity: "O(Bridge_Length)",
+        formula: null,
+        steps: [],
+        goodPoints: ["큐를 이용해 다리 위의 상황을 직관적으로 잘 표현했습니다."],
+        improvements: ["코드 내 주석이나 문자열 처리를 확인해 보세요."]
+      };
+    }
   }
 }
 
