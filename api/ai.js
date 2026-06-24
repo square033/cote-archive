@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     const {
       prompt,
       model = 'gemini-2.5-flash',
-      max_tokens = 1500,
+      max_tokens = 4096,
     } = req.body || {};
 
     if (!prompt) {
@@ -35,6 +35,9 @@ export default async function handler(req, res) {
           maxOutputTokens: max_tokens,
           responseMimeType: 'application/json', // JSON 모드 — 깔끔한 JSON 응답 유도
           temperature: 0.3,
+          // gemini-2.5-flash는 thinking 토큰을 먼저 소비해서 답변이 잘리는 경우가 있어
+          // thinking 예산을 낮춰 실제 JSON 답변 분량을 확보
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });
@@ -49,8 +52,11 @@ export default async function handler(req, res) {
     }
 
     // Gemini 응답 형식: data.candidates[0].content.parts[0].text
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return res.status(200).json({ text });
+    const cand = data.candidates?.[0];
+    const text = cand?.content?.parts?.map((p) => p.text || '').join('') || '';
+    // 응답이 토큰 한도로 잘렸는지 알려줌 (디버깅용)
+    const truncated = cand?.finishReason === 'MAX_TOKENS';
+    return res.status(200).json({ text, truncated });
   } catch (e) {
     return res.status(500).json({ error: e.message || 'Unknown error' });
   }
