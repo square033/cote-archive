@@ -60,7 +60,11 @@ async function askAI(prompt) {
   let text = (data.text || "").trim();
   
   // 1. 앞뒤 마크다운 코드 블록(```json) 확실하게 도려내기
-  text = text.replace(/^```[a-zA-Z]*\s*/, "").replace(/\s*```$/, "").trim();
+  // 앞뒤에 붙은 잡다한 설명이나 백틱을 무시하고, 최초의 '{' 부터 마지막 '}' 까지만 추출
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    text = jsonMatch[0];
+  }
   
   try {
     return JSON.parse(text);
@@ -81,47 +85,51 @@ async function askAI(prompt) {
       return JSON.parse(cleanedText);
     } catch (secondError) {
       console.error("최종 파싱 실패 원본:", text);
-      // 완전히 망가진 응답일 때 튕기지 않게 방어벽 리턴
-      return {
-        summary: "AI가 보낸 코드 분석 데이터에 정제되지 않은 특수문자나 주석이 섞여 파싱에 실패했습니다. 코드를 살짝 수정하거나 다시 시도해 주세요.",
-        algorithm: "큐 (Queue) / 시뮬레이션",
-        timeComplexity: "O(N)",
-        spaceComplexity: "O(Bridge_Length)",
-        formula: null,
-        steps: [],
-        goodPoints: ["큐를 이용해 다리 위의 상황을 직관적으로 잘 표현했습니다."],
-        improvements: ["코드 내 주석이나 문자열 처리를 확인해 보세요."]
-      };
+      
+      // 완전히 망가진 응답일 때 UI와 Key를 맞춰서 방어벽 리턴
+        return {
+          "개요": "AI가 보낸 코드 분석 데이터에 정제되지 않은 특수문자가 섞여 파싱에 실패했습니다.",
+          "알고리즘": "알 수 없음 (다시 시도해 주세요)",
+          "시간 복잡도": "-",
+          "공간 복잡도": "-",
+          "잘한 점": ["코드를 다시 제출하거나 잠시 후 리뷰를 요청해 보세요."],
+          "개선할 점": ["코드 내 주석이나 문자열 처리를 확인해 보세요."]
+        };
     }
   }
 }
 
 async function reviewCode(problem, code) {
   return askAI(
-    `너는 친절하고 꼼꼼한 알고리즘 코드 리뷰어야. 아래 문제와 풀이 코드를 분석해서 정확한 JSON 구조로만 정리해줘.
+    `너는 친절하고 꼼꼼한 알고리즘 코드 리뷰어야. 반드시 다음 규칙을 지켜서 출력해줘.
     
-[문제 제목: ${problem.title}]
-[유형: ${catOf(problem.category).name}]
-${(problem.body || "").slice(0, 1500)}
+    ⚠️ [최우선 규칙] 
+    - 마크다운 백틱(\`\`\`) 구문이나 "여기 JSON입니다" 같은 앞뒤 설명은 절대 포함하지 마.
+    - 오직 중괄호 '{'로 시작해서 '}'로 끝나는 순수한 JSON 데이터만 출력해.
+    - 텍스트 내부에 큰따옴표(")가 들어간다면 반드시 백슬래시(\\")로 이스케이프 처리를 하거나 작은따옴표(')를 사용해.
+    
+    [문제 제목: ${problem.title}]
+    [유형: ${catOf(problem.category).name}]
+    ${(problem.body || "").slice(0, 1500)}
+    
+    [사용자 풀이 코드]
+    ${code.slice(0, 3500)}
 
-[사용자 풀이 코드]
-${code.slice(0, 3500)}
-
-⚠️ 중요 규칙: 
-1. 절대로 설명이나 마크다운(\`\`\`)을 붙이지 말고, 오직 { ... } 형태의 순수한 JSON 데이터로만 출력해.
-2. 텍스트 내부에 큰따옴표(")를 써야 한다면 반드시 백슬래시(\\")로 이스케이프를 하거나 작은따옴표(')를 사용해.
-
-[응답할 JSON 포맷]
-{
-  "summary": "풀이 한 줄 요약",
-  "algorithm": "사용된 핵심 알고리즘/자료구조",
-  "timeComplexity": "O(...) 와 짧은 근거",
-  "spaceComplexity": "O(...) 와 짧은 근거",
-  "formula": "핵심 수식이나 점화식 (없으면 null)",
-  "steps": [{"name":"단계 이름","desc":"이 단계에서 코드가 하는 일"}],
-  "goodPoints": ["잘한 점 1~3개"],
-  "improvements": ["개선 제안 1~3개"]
-}`
+    ⚠️ 중요 규칙: 
+    1. 절대로 설명이나 마크다운(\`\`\`)을 붙이지 말고, 오직 { ... } 형태의 순수한 JSON 데이터로만 출력해.
+    2. 텍스트 내부에 큰따옴표(")를 써야 한다면 반드시 백슬래시(\\")로 이스케이프를 하거나 작은따옴표(')를 사용해.
+    
+    [응답할 JSON 포맷]
+    {
+      "summary": "풀이 한 줄 요약",
+      "algorithm": "사용된 핵심 알고리즘/자료구조",
+      "timeComplexity": "O(...) 와 짧은 근거",
+      "spaceComplexity": "O(...) 와 짧은 근거",
+      "formula": "핵심 수식이나 점화식 (없으면 null)",
+      "steps": [{"name":"단계 이름","desc":"이 단계에서 코드가 하는 일"}],
+      "goodPoints": ["잘한 점 1~3개"],
+      "improvements": ["개선 제안 1~3개"]
+    }`
   );
 }
 
