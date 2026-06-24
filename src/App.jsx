@@ -46,6 +46,7 @@ const clay = {
 const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif`;
 
 /* ───────────────────────── API 헬퍼 ───────────────────────── */
+/* ───────────────────────── API 헬퍼 ───────────────────────── */
 async function askAI(prompt) {
   const res = await fetch("/api/ai", {
     method: "POST",
@@ -57,34 +58,33 @@ async function askAI(prompt) {
   const data = await res.json();
   let text = (data.text || "").trim();
 
-  // 1. 최초의 '{' 부터 마지막 '}' 까지만 정확히 추출
+  // 1. Gemini가 간혹 앞뒤에 백틱(```json)을 붙여주는 경우를 대비해 순수 JSON 영역 추출
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     text = jsonMatch[0];
   }
 
   try {
+    // 2. 곧바로 파싱 시도 (백엔드에 JSON 모드가 켜져 있으므로 대부분 여기서 성공합니다)
     return JSON.parse(text);
   } catch (parseError) {
-    console.error("1차 파싱 실패, 정제 시도:", text);
+    console.error("1차 파싱 실패, 줄바꿈 및 제어 문자 정제 후 재시도:", parseError);
+    
     try {
-      // 2. 제어 문자 및 줄바꿈 기호 안전하게 이스케이프 처리
+      // 3. 텍스트 내부의 실제 줄바꿈 문자 문자열(\\n)로 안전하게 이스케이프
       let cleanedText = text
         .replace(/\n/g, "\\n")
         .replace(/\r/g, "\\r")
         .replace(/\t/g, "\\t");
 
-      // 연속된 공백 및 줄바꿈 깨짐 방지
+      // 제어 문자 제거
       cleanedText = cleanedText.replace(/[\u0000-\u0019]+/g, ""); 
-
-      if (!cleanedText.startsWith("{")) cleanedText = cleanedText.substring(cleanedText.indexOf("{"));
-      if (!cleanedText.endsWith("}")) cleanedText = cleanedText.substring(0, cleanedText.lastIndexOf("}") + 1);
 
       return JSON.parse(cleanedText);
     } catch (secondError) {
-      console.error("2차 파싱 실패, 정규식 수동 복구 시도");
-      
-      // 3. 정괄호/따옴표가 심하게 깨졌을 때 핵심 데이터만 정규식으로 강제 추출 (try 위치 교정)
+      console.error("2차 파싱 실패, 정규식 핵심 데이터 추출 시도:", secondError);
+
+      // 4. 문법이 완전히 깨졌을 때 핵심 텍스트만 정규식으로 건져내는 구제 로직
       try {
         const summaryMatch = text.match(/"summary"\s*:\s*"([^"]+)"/);
         const algoMatch = text.match(/"algorithm"\s*:\s*"([^"]+)"/);
@@ -103,13 +103,11 @@ async function askAI(prompt) {
             "improvements": []
           };
         }
-      } catch (e) { 
-        console.error("정규식 파싱마저 실패:", e);
+      } catch (e) {
+        console.error("정규식 구제 실패:", e);
       }
 
-      console.error("최종 파싱 실패 원본:", text);
-      
-      // 완벽히 먹통일 때 띄워줄 최종 Fallback
+      // 5. 진짜 최후의 보루 (완벽한 에러 화면)
       return {
         "summary": "AI 응답 데이터에 특수문자나 형식 오류가 섞여 파싱에 실패했습니다. 다시 시도해 주세요.",
         "algorithm": "알 수 없음",
