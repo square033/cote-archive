@@ -731,33 +731,54 @@ function AddModal({ onClose, onSave }) {
   const [err, setErr] = useState("");
 
   const save = async () => {
-    if (!title.trim()) { setErr("문제 제목을 입력해 주세요."); return; }
-    setErr("");
-    setBusy(true);
-    try {
-      let category = manualCat, subCategory = null, reason = "";
-      const plainBody = body.replace(/<[^>]+>/g, " ").trim(); // AI 분류용 텍스트만 추출
-      if (mode === "ai") {
-        if (!plainBody) { setErr("AI 분류를 쓰려면 문제 내용을 입력해 주세요."); setBusy(false); return; }
-        const r = await classifyProblem(title, plainBody);
-        category = CATEGORIES.some((c) => c.id === r.category) ? r.category : "etc";
-        subCategory = category === "etc" ? (r.subCategory || "sub_etc") : null;
-        reason = r.reason || "";
-      } else {
-        // 직접 선택(manual) 모드일 때
-        subCategory = category === "etc" ? manualSubCat : null;
+      if (!title.trim()) {
+        setErr("문제 제목을 입력해 주세요.");
+        return;
       }
-      
-      onSave({
-        id: "p" + Date.now(), title: title.trim(), url: url.trim(), body: body.trim(), level,
-        category: mode === "manual" ? manualCat : category, subCategory: (mode === "manual" ? manualCat : category) === "etc" ? manualSubCat : null,
-        aiReason: reason, createdAt: Date.now(), solutions: [],
-      });
-    } catch (e) {
-      setErr("AI 분류에 실패했어요. 잠시 후 다시 시도하거나 직접 선택해 주세요.");
-      setBusy(false);
-    }
-  };
+      setErr("");
+      setBusy(true);
+  
+      try {
+        // 변수 선언 명확히 통일
+        let finalCategory = manualCat;
+        let finalSubCategory = null;
+        let reason = "";
+  
+        const plainBody = body.replace(/<[^>]+>/g, " ").trim();
+  
+        if (mode === "ai") {
+          if (!plainBody) {
+            setErr("AI 분류를 쓰려면 문제 내용을 입력해 주세요.");
+            setBusy(false);
+            return;
+          }
+          const r = await classifyProblem(title, plainBody);
+          finalCategory = CATEGORIES.some((c) => c.id === r.category) ? r.category : "etc";
+          finalSubCategory = finalCategory === "etc" ? (r.subCategory || "sub_etc") : null;
+          reason = r.reason || "";
+        } else {
+          // 직접 선택 모드
+          finalSubCategory = finalCategory === "etc" ? manualSubCat : null;
+        }
+  
+        onSave({
+          id: "p" + Date.now(),
+          title: title.trim(),
+          url: url.trim(),
+          body: body.trim(),
+          level,
+          category: finalCategory,
+          subCategory: finalSubCategory,
+          aiReason: reason,
+          createdAt: Date.now(),
+          solutions: [],
+        });
+      } catch (e) {
+        console.error("등록 오류:", e);
+        setErr("AI 분류에 실패했어요. 잠시 후 다시 시도하거나 직접 선택해 주세요.");
+        setBusy(false);
+      }
+    };
 
   const input = { fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 14, padding: "12px 14px", fontSize: 14.5, outline: "none", background: "#FAFBFC", color: "#191F28" };
 
