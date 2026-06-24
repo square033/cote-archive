@@ -66,7 +66,12 @@ async function askAI(prompt, maxTokens = 4096) {
     body: JSON.stringify({ prompt, max_tokens: maxTokens }),
   });
 
-  if (!res.ok) throw new Error("API 호출 실패");
+  if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error("AI 사용량 한도에 도달했어요. 1분쯤 후에 다시 시도해 주세요. (무료 티어 분당 한도)");
+    }
+    throw new Error(`API 호출 실패 (${res.status})`);
+  }
   const data = await res.json();
   let text = (data.text || "").trim();
   if (data.truncated) console.warn("⚠️ AI 응답이 토큰 한도로 잘렸어요. max_tokens를 더 늘려야 할 수 있습니다.");
@@ -776,7 +781,8 @@ function AddModal({ onClose, onSave }) {
         level, aiReason: reason, createdAt: Date.now(), solutions: [],
       });
     } catch (e) {
-      setErr("AI 분류에 실패했어요. 잠시 후 다시 시도하거나 직접 선택해 주세요.");
+      console.error("AI 분류 에러:", e);
+      setErr(e.message || "AI 분류에 실패했어요. 잠시 후 다시 시도하거나 직접 선택해 주세요.");
       setBusy(false);
     }
   };
@@ -887,6 +893,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   const [inlineLang, setInlineLang] = useState("cpp");
   const [editingMeta, setEditingMeta] = useState(false); // 카테고리·난이도 편집
   const [err, setErr] = useState("");
+  const [reviewErr, setReviewErr] = useState({}); // { [solId]: 에러메시지 }
 
   const setCategory = (id) => onUpdate({ ...problem, category: id, subCategory: id === "etc" ? (problem.subCategory || "etc") : null });
   const setSubCategory = (id) => onUpdate({ ...problem, subCategory: id });
@@ -904,12 +911,14 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   };
 
   const runReview = async (sol) => {
-    setReviewing(sol.id); setErr("");
+    setReviewing(sol.id);
+    setReviewErr((prev) => ({ ...prev, [sol.id]: "" }));
     try {
       const review = await reviewCode(problem, sol.code);
       onUpdate({ ...problem, solutions: problem.solutions.map((s) => (s.id === sol.id ? { ...s, review } : s)) });
     } catch (e) {
-      setErr("AI 리뷰에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      console.error("AI 리뷰 에러:", e);
+      setReviewErr((prev) => ({ ...prev, [sol.id]: e.message || "AI 리뷰에 실패했어요. 잠시 후 다시 시도해 주세요." }));
     }
     setReviewing(null);
   };
@@ -1173,6 +1182,11 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                     {sol.memo && <MemoView text={sol.memo} />}
                     <pre style={{ ...mono, margin: 0, background: "#191F28", color: "#E8F0FE", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}
                       dangerouslySetInnerHTML={{ __html: highlightCode(sol.code, sol.lang || "cpp") }} />
+                    {reviewErr[sol.id] && (
+                      <div style={{ display: "flex", gap: 7, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, background: "#FFE9EF", borderRadius: 12, padding: "10px 14px", marginTop: 12 }}>
+                        <TriangleAlert size={16} style={{ flexShrink: 0 }} />{reviewErr[sol.id]}
+                      </div>
+                    )}
                     <ReviewCard review={sol.review} />
                   </>
                 )}
