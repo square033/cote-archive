@@ -18,6 +18,16 @@ const CATEGORIES = [
 ];
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.find((c) => c.id === "etc");
 
+const SUB_CATEGORIES = [
+  { id: "hash", name: "해시" },
+  { id: "stack_queue", name: "스택/큐" },
+  { id: "heap", name: "힙" },
+  { id: "sort", name: "정렬" },
+  { id: "graph", name: "그래프" },
+  { id: "sub_etc", name: "기타" },
+];
+const subCatOf = (id) => SUB_CATEGORIES.find((s) => s.id === id) || { id: "sub_etc", name: "기타" };
+
 const LEVELS = [
   { id: "lv0", name: "Lv.0", label: "입문", color: "#8B95A1", bg: "#F2F4F6" },
   { id: "lv1", name: "Lv.1", label: "쉬움", color: "#1FA97E", bg: "#E0F7EE" },
@@ -174,16 +184,25 @@ function Chip({ active, color, children, onClick }) {
   );
 }
 
-function CatBadge({ id, small }) {
+function CatBadge({ id, subId, small }) {
   const c = catOf(id);
+  const sub = subId ? subCatOf(subId) : null;
+  
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5,
-      background: c.bg, color: c.deep, fontWeight: 700,
-      fontSize: small ? 12 : 13, padding: small ? "4px 10px" : "6px 12px",
-      borderRadius: 999, fontFamily: FONT,
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5,
+      background: c.bg,
+      color: c.deep,
+      fontWeight: 700,
+      fontSize: small ? 12 : 13,
+      padding: small ? "4px 10px" : "6px 12px",
+      borderRadius: 999,
+      fontFamily: FONT,
     }}>
-      <span>{c.emoji}</span>{c.name}
+      <span>{c.emoji}</span>
+      {c.name} {sub ? ` (${sub.name})` : ""} {/* 👈 etc (스택/큐) 형태로 출력 */}
     </span>
   );
 }
@@ -676,6 +695,7 @@ function AddModal({ onClose, onSave }) {
   const [body, setBody] = useState("");
   const [mode, setMode] = useState("ai"); // ai | manual
   const [manualCat, setManualCat] = useState("dfs");
+  const [manualSubCat, setManualSubCat] = useState("sub_etc");
   const [level, setLevel] = useState("lv1");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -693,8 +713,9 @@ function AddModal({ onClose, onSave }) {
         reason = r.reason || "";
       }
       onSave({
-        id: "p" + Date.now(), title: title.trim(), url: url.trim(), body: body.trim(),
-        category, level, aiReason: reason, createdAt: Date.now(), solutions: [],
+        id: "p" + Date.now(), title: title.trim(), url: url.trim(), body: body.trim(), level,
+        category: mode === "manual" ? manualCat : category, subCategory: (mode === "manual" ? manualCat : category) === "etc" ? manualSubCat : null,
+        aiReason: reason, createdAt: Date.now(), solutions: [],
       });
     } catch (e) {
       setErr("AI 분류에 실패했어요. 잠시 후 다시 시도하거나 직접 선택해 주세요.");
@@ -758,6 +779,35 @@ function AddModal({ onClose, onSave }) {
                 ))}
               </div>
             )}
+
+            {(mode === "manual" ? manualCat === "etc" : category === "etc") && (
+              <div style={{ marginTop: 10, padding: 12, background: "#F2F4F6", borderRadius: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#4E5968", marginBottom: 8 }}>
+                  기타 세부 유형 (중분류)
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {SUB_CATEGORIES.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setManualSubCat(sub.id)}
+                      style={{
+                        fontFamily: FONT,
+                        fontSize: 13,
+                        padding: "6px 12px",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        border: manualSubCat === sub.id ? "1.5px solid #6B7684" : "1.5px solid #E5E8EB",
+                        background: manualSubCat === sub.id ? "#6B7684" : "#fff",
+                        color: manualSubCat === sub.id ? "#fff" : "#4E5968",
+                      }}
+                    >
+                      {sub.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600 }}><TriangleAlert size={15} />{err}</div>}
@@ -791,7 +841,8 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   const [inlineLang, setInlineLang] = useState("cpp");
   const [editingMeta, setEditingMeta] = useState(false); // 카테고리·난이도 편집
   const [err, setErr] = useState("");
-
+  const [manualSubCat, setManualSubCat] = useState("sub_etc");
+  
   const setCategory = (id) => onUpdate({ ...problem, category: id });
   const setLevel = (id) => onUpdate({ ...problem, level: id });
 
@@ -875,7 +926,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <CatBadge id={problem.category} />
+              <CatBadge id={problem.category} subId={problem.subCategory} />
               {lv && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: lv.bg, color: lv.color, fontWeight: 800, fontSize: 13, padding: "6px 12px", borderRadius: 999, fontFamily: FONT }}>
                   {lv.name} · {lv.label}
@@ -1394,7 +1445,7 @@ export default function App() {
                     onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = clay.card.boxShadow; }}
                   >
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <CatBadge id={p.category} small />
+                      <CatBadge id={problem.category} subId={problem.subCategory} small />
                       {lv && (
                         <span style={{ fontSize: 11.5, fontWeight: 800, color: lv.color, background: lv.bg, padding: "4px 9px", borderRadius: 999 }}>
                           {lv.name}
