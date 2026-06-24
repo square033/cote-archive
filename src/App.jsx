@@ -53,48 +53,47 @@ async function askAI(prompt) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt }),
   });
-  
+
   if (!res.ok) throw new Error("API 호출 실패");
   const data = await res.json();
-  
   let text = (data.text || "").trim();
-  
-  // 1. 앞뒤 마크다운 코드 블록(```json) 확실하게 도려내기
-  // 앞뒤에 붙은 잡다한 설명이나 백틱을 무시하고, 최초의 '{' 부터 마지막 '}' 까지만 추출
+
+  // 1. 최초의 '{' 부터 마지막 '}' 까지만 정확히 추출
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     text = jsonMatch[0];
   }
-  
+
   try {
     return JSON.parse(text);
   } catch (parseError) {
     console.error("1차 파싱 실패, 정제 시도:", text);
-    
     try {
-      // 2. 줄바꿈 문자가 JSON을 깨뜨리지 않도록 이스케이프 처리 및 제어문자 청소
+      // 2. 제어 문자 및 줄바꿈 기호 안전하게 이스케이프 처리
       let cleanedText = text
         .replace(/\n/g, "\\n")
         .replace(/\r/g, "\\r")
         .replace(/\t/g, "\\t");
-        
-      // 줄바꿈 정제 후 앞뒤 깨진 괄호 쌍이 있다면 보정
+
+      // 깨진 괄호 쌍 보정
       if (!cleanedText.startsWith("{")) cleanedText = cleanedText.substring(cleanedText.indexOf("{"));
       if (!cleanedText.endsWith("}")) cleanedText = cleanedText.substring(0, cleanedText.lastIndexOf("}") + 1);
-      
+
       return JSON.parse(cleanedText);
     } catch (secondError) {
       console.error("최종 파싱 실패 원본:", text);
       
-      // 완전히 망가진 응답일 때 UI와 Key를 맞춰서 방어벽 리턴
-        return {
-          "개요": "AI가 보낸 코드 분석 데이터에 정제되지 않은 특수문자가 섞여 파싱에 실패했습니다.",
-          "알고리즘": "알 수 없음 (다시 시도해 주세요)",
-          "시간 복잡도": "-",
-          "공간 복잡도": "-",
-          "잘한 점": ["코드를 다시 제출하거나 잠시 후 리뷰를 요청해 보세요."],
-          "개선할 점": ["코드 내 주석이나 문자열 처리를 확인해 보세요."]
-        };
+      // [중요] ReviewCard 컴포넌트의 영문 Key(goodPoints, improvements 등)와 완벽히 일치시킴
+      return {
+        "summary": "AI 응답 데이터에 특수문자나 형식 오류가 섞여 파싱에 실패했습니다. 다시 시도해 주세요.",
+        "algorithm": "알 수 없음",
+        "timeComplexity": "-",
+        "spaceComplexity": "-",
+        "formula": null,
+        "steps": [],
+        "goodPoints": ["코드를 다시 제출하거나 잠시 후 리뷰를 요청해 보세요."],
+        "improvements": ["코드 내 특수 주석이나 문자열이 AI 포맷을 깨뜨렸을 수 있습니다."]
+      };
     }
   }
 }
