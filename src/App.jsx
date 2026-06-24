@@ -1161,6 +1161,18 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                   )}
                 </div>
 
+                {/* 리뷰 버튼 아래 안내 — 실패하면 에러, 성공해서 결과 있으면 안내 */}
+                {!isEditing && reviewErr[sol.id] && (
+                  <div style={{ display: "flex", gap: 7, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, background: "#FFE9EF", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                    <TriangleAlert size={16} style={{ flexShrink: 0 }} />{reviewErr[sol.id]}
+                  </div>
+                )}
+                {!isEditing && !reviewErr[sol.id] && sol.review && (
+                  <div style={{ display: "flex", gap: 7, alignItems: "center", color: "#7C5CE0", fontSize: 13.5, fontWeight: 600, background: "#EFE9FF", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                    <Sparkles size={16} style={{ flexShrink: 0 }} /> 리뷰가 완료됐어요! 아래 AI 코드 리뷰에서 분석 결과를 확인하세요 👇
+                  </div>
+                )}
+
                 {isEditing ? (
                   // ── 인라인 수정 모드: 카드 그 자리에서 바로 편집 ──
                   <div>
@@ -1182,11 +1194,6 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                     {sol.memo && <MemoView text={sol.memo} />}
                     <pre style={{ ...mono, margin: 0, background: "#191F28", color: "#E8F0FE", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}
                       dangerouslySetInnerHTML={{ __html: highlightCode(sol.code, sol.lang || "cpp") }} />
-                    {reviewErr[sol.id] && (
-                      <div style={{ display: "flex", gap: 7, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, background: "#FFE9EF", borderRadius: 12, padding: "10px 14px", marginTop: 12 }}>
-                        <TriangleAlert size={16} style={{ flexShrink: 0 }} />{reviewErr[sol.id]}
-                      </div>
-                    )}
                     <ReviewCard review={sol.review} />
                   </>
                 )}
