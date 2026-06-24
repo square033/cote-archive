@@ -126,7 +126,12 @@ async function askAI(prompt) {
 
 async function reviewCode(problem, code) {
   return askAI(
-    `너는 친절하고 꼼꼼한 알고리즘 코드 리뷰어야. 반드시 다음 규칙을 지켜서 출력해줘.
+    `너는 친절하고 꼼꼼한 알고리즘 코드 리뷰어야. 반드시 다음 규칙을 지켜서 제공된 코드를 분석하 반드시 아래의 JSON 포맷 규칙을 완벽히 지켜서 응답해줘.
+
+    ⚠️ [필수 주의사항]
+    1. 결과물은 반드시 JSON 객체 하나만 반환해야 해.
+    2. JSON 내부 속성값(텍스트) 안에 절대 주석 기호(//, /* */)나 큰따옴표(")를 그대로 넣지 마. 큰따옴표가 필요하다면 작은따옴표(')로 대체해줘.
+    3. 줄바꿈을 할 때는 실제 엔터(개행)를 치지 말고 텍스트 내에서 '\\n' 문자로 처리해줘.
     
     ⚠️ [최우선 규칙] 
     - 마크다운 백틱(\`\`\`) 구문이나 "여기 JSON입니다" 같은 앞뒤 설명은 절대 포함하지 마.
@@ -148,12 +153,12 @@ async function reviewCode(problem, code) {
     {
       "summary": "풀이 한 줄 요약",
       "algorithm": "사용된 핵심 알고리즘/자료구조",
-      "timeComplexity": "O(...) 와 짧은 근거",
-      "spaceComplexity": "O(...) 와 짧은 근거",
+      "timeComplexity": "시간 복잡도 (예: O(N))",
+      "spaceComplexity": "공간 복잡도",
       "formula": "핵심 수식이나 점화식 (없으면 null)",
       "steps": [{"name":"단계 이름","desc":"이 단계에서 코드가 하는 일"}],
-      "goodPoints": ["잘한 점 1~3개"],
-      "improvements": ["개선 제안 1~3개"]
+      "goodPoints": ["잘한 점 1", "잘한 점 2"],
+      "improvements": ["개선 아이디어 1", "개선 아이디어 2"]
     }`
   );
 }
