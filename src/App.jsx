@@ -926,8 +926,23 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
           placeholder={"// 여기에 코드를 작성하거나 붙여넣어 주세요\n#include <bits/stdc++.h>\nusing namespace std;"}
           style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 220, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 16, padding: 16, fontSize: 13.5, lineHeight: 1.65, outline: "none" }} />
 
-        <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모 (선택) — 이 풀이에서 배운 점, 패턴 등"
-          style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 14, padding: "11px 14px", fontSize: 14, outline: "none", margin: "10px 0", background: "#FAFBFC" }} />
+        <textarea value={memo} onChange={(e) => setMemo(e.target.value)} 
+          placeholder={"메모 (선택) — 이 풀이에서 배운 점, 패턴 등"} 
+          style={{ 
+            fontFamily: FONT, 
+            width: "100%", 
+            boxSizing: "border-box", 
+            border: "1.5px solid #E5E8EB", 
+            borderRadius: 14, 
+            padding: "11px 14px", 
+            fontSize: 14, 
+            outline: "none", 
+            margin: "10px 0", 
+            background: "#FAFBFC",
+            resize: "vertical", // 사용자가 높이를 조절할 수 있도록 설정
+            minHeight: "60px"   // 기본 최소 높이
+          }} 
+        />
 
         {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}><TriangleAlert size={15} />{err}</div>}
 
@@ -989,7 +1004,22 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                     <div style={{ marginBottom: 8 }}>{langPicker(inlineLang, setInlineLang)}</div>
                     <textarea value={inlineCode} onChange={(e) => setInlineCode(e.target.value)} spellCheck={false}
                       style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 200, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, outline: "none" }} />
-                    <input value={inlineMemo} onChange={(e) => setInlineMemo(e.target.value)} placeholder="메모 (선택)"
+                    <textarea value={inlineMemo} onChange={(e) => setInlineMemo(e.target.value)} placeholder="메모 (선택)" 
+                      style={{ 
+                        fontFamily: FONT, 
+                        width: "100%", 
+                        boxSizing: "border-box", 
+                        border: "1.5px solid #E5E8EB", 
+                        borderRadius: 12, 
+                        padding: "10px 13px", 
+                        fontSize: 13.5, 
+                        outline: "none", 
+                        margin: "10px 0", 
+                        background: "#FAFBFC",
+                        resize: "vertical",
+                        minHeight: "60px"
+                      }} 
+                    />
                       style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 12, padding: "10px 13px", fontSize: 13.5, outline: "none", margin: "10px 0", background: "#FAFBFC" }} />
                     <div style={{ display: "flex", gap: 8 }}>
                       <PrimaryBtn onClick={() => saveInlineEdit(sol.id)} color="#1FA97E" style={{ padding: "10px 18px", fontSize: 13.5 }}>
