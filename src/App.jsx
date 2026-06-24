@@ -805,14 +805,17 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
     onUpdate({ ...problem, solutions: [sol, ...problem.solutions] });
     setCode(""); setMemo(""); setAuthor("");
   };
-
+  
   const runReview = async (sol) => {
-    setReviewing(sol.id); setErr("");
+    setReviewing(sol.id);
+    setErr("");
     try {
       const review = await reviewCode(problem, sol.code);
       onUpdate({ ...problem, solutions: problem.solutions.map((s) => (s.id === sol.id ? { ...s, review } : s)) });
     } catch (e) {
-      setErr("AI 리뷰에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      // 💡 콘솔에 진짜 원인(타임아웃인지, 500 에러인지)을 출력하도록 변경
+      console.error("runReview에서 잡힌 통신/서버 에러:", e);
+      setErr(`AI 리뷰 실패: ${e.message || "잠시 후 다시 시도해 주세요."}`);
     }
     setReviewing(null);
   };
