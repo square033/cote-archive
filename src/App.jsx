@@ -53,46 +53,58 @@ async function askAI(prompt) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt }),
   });
+  
   if (!res.ok) throw new Error("API 호출 실패");
   const data = await res.json();
-  const text = (data.text || "").replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
-}
-
-async function classifyProblem(title, body) {
-  return askAI(
-    `다음 코딩테스트 문제를 아래 6가지 유형 중 정확히 하나로 분류해줘.
-유형 id 목록: dfs(DFS/BFS/백트래킹), dnc(분할 정복), bin(이진 탐색), greedy(그리디), dp(다이나믹 프로그래밍), etc(위 5가지에 해당하지 않는 기타 유형)
-
-문제 제목: ${title}
-문제 내용:
-${body.slice(0, 3000)}
-
-반드시 아래 JSON 형식으로만 응답해. 마크다운이나 다른 텍스트 절대 금지:
-{"category":"dfs|dnc|bin|greedy|dp|etc","reason":"분류 이유 한 문장"}`
-  );
+  
+  // 정규식을 이용해 ```json ... ``` 이나 ``` ... ``` 마크다운 감싸기를 완전히 제거
+  let text = (data.text || "").trim();
+  text = text.replace(/^```[a-zA-Z]*\s*/, "").replace(/\s*```$/, "").trim();
+  
+  try {
+    return JSON.parse(text);
+  } catch (parseError) {
+    console.error("JSON 파싱 에러 발생한 원본 텍스트:", text);
+    
+    // 만약 파싱에 실패하면 최소한의 기본 포맷이라도 반환하여 화면 튕김 방지
+    return {
+      summary: "AI가 응답 형식을 맞추지 못했습니다. 다시 시도해 주세요.",
+      algorithm: "알 수 없음",
+      timeComplexity: "-",
+      spaceComplexity: "-",
+      formula: null,
+      steps: [],
+      goodPoints: ["코드를 다시 제출하거나 잠시 후 리뷰를 요청해 보세요."],
+      improvements: []
+    };
+  }
 }
 
 async function reviewCode(problem, code) {
   return askAI(
-    `너는 친절한 알고리즘 코드 리뷰어야. 아래 문제와 풀이 코드를 분석해서 JSON으로 정리해줘.
+    `너는 친절하고 꼼꼼한 알고리즘 코드 리뷰어야. 아래 문제와 풀이 코드를 분석해서 정확한 JSON 구조로만 정리해줘.
+    
+[문제 제목: ${problem.title}]
+[유형: ${catOf(problem.category).name}]
+${(problem.body || "").slice(0, 1500)}
 
-[문제: ${problem.title} / 유형: ${catOf(problem.category).name}]
-${(problem.body || "").slice(0, 2000)}
+[사용자 풀이 코드]
+${code.slice(0, 3500)}
 
-[풀이 코드]
-${code.slice(0, 4000)}
+⚠️ 중요 규칙: 
+1. 절대로 설명이나 마크다운(\`\`\`)을 붙이지 말고, 오직 { ... } 형태의 순수한 JSON 데이터로만 출력해.
+2. 텍스트 내부에 큰따옴표(")를 써야 한다면 반드시 백슬래시(\\")로 이스케이프를 하거나 작은따옴표(')를 사용해.
 
-반드시 아래 JSON 형식으로만 응답 (마크다운 금지, 한국어로 작성):
+[응답할 JSON 포맷]
 {
- "summary": "풀이 한 줄 요약",
- "algorithm": "사용된 핵심 알고리즘/자료구조",
- "timeComplexity": "O(...) 와 짧은 근거",
- "spaceComplexity": "O(...) 와 짧은 근거",
- "formula": "핵심 수식이나 점화식 (예: dp[i] = max(dp[i-1], dp[i-2]+a[i])), 없으면 null",
- "steps": [{"name":"단계 이름","desc":"이 단계에서 코드가 하는 일"}],
- "goodPoints": ["잘한 점 1~3개"],
- "improvements": ["개선 제안 1~3개"]
+  "summary": "풀이 한 줄 요약",
+  "algorithm": "사용된 핵심 알고리즘/자료구조",
+  "timeComplexity": "O(...) 와 짧은 근거",
+  "spaceComplexity": "O(...) 와 짧은 근거",
+  "formula": "핵심 수식이나 점화식 (없으면 null)",
+  "steps": [{"name":"단계 이름","desc":"이 단계에서 코드가 하는 일"}],
+  "goodPoints": ["잘한 점 1~3개"],
+  "improvements": ["개선 제안 1~3개"]
 }`
   );
 }
