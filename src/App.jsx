@@ -968,7 +968,7 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
   );
 
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto", padding: "0 16px 80px" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 16px 80px" }}>
       <button onClick={onBack} style={{ fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "transparent", color: "#6B7684", fontWeight: 700, fontSize: 14, cursor: "pointer", padding: "16px 0" }}>
         <ChevronLeft size={18} /> 목록으로
       </button>
@@ -1414,7 +1414,7 @@ export default function App() {
       {/* 게스트 안내 배너 */}
       {!session && (
         <div style={{
-          ...clay.glass, margin: "14px auto 0", maxWidth: 980, padding: "12px 18px", borderRadius: 16,
+          ...clay.glass, margin: "14px auto 0", maxWidth: 1280, padding: "12px 18px", borderRadius: 16,
           display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, color: "#4E5968",
           background: "linear-gradient(135deg,#FFF5E6,#FFF9F0)", border: "1px solid #FFE5C2",
         }}>
@@ -1431,7 +1431,7 @@ export default function App() {
 
       {/* 로그인 직후 동기화 중 표시 */}
       {syncing && (
-        <div style={{ maxWidth: 980, margin: "10px auto 0", padding: "0 16px", display: "flex", alignItems: "center", gap: 8, color: "#3182F6", fontSize: 13.5, fontWeight: 700 }}>
+        <div style={{ maxWidth: 1280, margin: "10px auto 0", padding: "0 16px", display: "flex", alignItems: "center", gap: 8, color: "#3182F6", fontSize: 13.5, fontWeight: 700 }}>
           <Loader2 size={15} className="spin" /> 게스트로 저장한 문제를 계정으로 옮기는 중…
         </div>
       )}
@@ -1439,7 +1439,7 @@ export default function App() {
       {view.page === "detail" && current ? (
         <div className="rise"><ProblemDetail problem={current} onBack={goHome} onUpdate={updateProblem} onDelete={deleteProblem} /></div>
       ) : (
-        <main className="rise" style={{ maxWidth: 980, margin: "0 auto", padding: "28px 16px 80px" }}>
+        <main className="rise" style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 16px 80px" }}>
           {/* 히어로 */}
           <div style={{ marginBottom: 24 }}>
             <h1 style={{ margin: 0, fontSize: 27, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1.35 }}>
