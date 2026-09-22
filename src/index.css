@@ -1,3 +1,134 @@
+/* ───────── 테마 토큰 ─────────
+   라이트가 기본값이고, <html data-theme="dark"> 가 붙으면 다크로 덮어쓴다.
+   JSX의 인라인 스타일에서 var(--토큰) 으로 쓰인다. */
+:root {
+  color-scheme: light;
+
+  /* 페이지 배경 그라데이션 */
+  --page-1: #F4F7FB;
+  --page-2: #EEF3FA;
+  --page-3: #F6F4FB;
+
+  /* 표면 · 선 */
+  --surface: #FFFFFF;
+  --surface-2: #FAFBFC;
+  --surface-3: #F7F9FC;
+  --fill: #F2F4F6;
+  --fill-2: #EFF1F4;
+  --border: #E5E8EB;
+  --border-strong: #D8DCE2;
+
+  /* 글자 */
+  --text: #191F28;
+  --text-1: #333D4B;
+  --text-2: #4E5968;
+  --text-3: #6B7684;
+  --text-4: #8B95A1;
+  --text-5: #A8B1BD;
+
+  /* 강조색 */
+  --accent: #3182F6;        /* 글자·테두리용 */
+  --accent-btn: #3182F6;    /* 흰 글자를 올리는 꽉 찬 버튼용 */
+  --accent-soft: #E4F0FF;
+  --purple: #7C5CE0;
+  --purple-soft: #EFE9FF;
+  --pink: #E0527A;
+  --pink-soft: #FFE9EF;
+  --green: #1FA97E;
+  --orange: #E8923A;
+  --disabled: #B0C4DE;
+
+  /* AI 리뷰 카드 */
+  --review-1: #FBFCFF;
+  --review-2: #F4F8FF;
+  --ok-bg: #E9FBF3;
+  --ok-text: #2A6E57;
+  --warn-bg: #FFF5E6;
+  --warn-bg-2: #FFF9F0;
+  --warn-border: #FFE5C2;
+  --warn-text: #8A5A22;
+
+  /* 코드 블록 (다크에서는 조금 더 어둡게) */
+  --code-bg: #191F28;
+  --code-text: #E8F0FE;
+  --code-str: #9EEFC9;
+  --code-num: #FFB86C;
+  --code-kw: #82AAFF;
+  --code-comment: #6B8A99;
+  --inline-code-bg: #E8EAED;
+  --inline-code-text: #D6336C;
+
+  /* 그림자 · 유리 효과 */
+  --shadow-soft: rgba(100,116,139,0.06);
+  --shadow-mid: rgba(100,116,139,0.10);
+  --shadow-strong: rgba(100,116,139,0.22);
+  --inset-hi: rgba(255,255,255,0.9);
+  --ring-hi: rgba(255,255,255,0.8);
+  --veil: rgba(255,255,255,0.7);
+  --veil-2: rgba(255,255,255,0.65);
+  --glass: rgba(255,255,255,0.72);
+  --glass-border: rgba(255,255,255,0.6);
+  --overlay: rgba(25,31,40,0.45);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page-1: #14171B;
+  --page-2: #111418;
+  --page-3: #16141C;
+
+  --surface: #1C2026;
+  --surface-2: #191D22;
+  --surface-3: #20252B;
+  --fill: #262B31;
+  --fill-2: #23282E;
+  --border: #2F353C;
+  --border-strong: #3B434C;
+
+  --text: #ECEFF2;
+  --text-1: #DCE0E5;
+  --text-2: #C3CAD2;
+  --text-3: #9BA4AE;
+  --text-4: #838D98;
+  --text-5: #6C757F;
+
+  --accent: #6FA9FF;
+  --accent-btn: #3182F6;
+  --accent-soft: #16304F;
+  --purple: #B49CFF;
+  --purple-soft: #2D2648;
+  --pink: #FF8FAE;
+  --pink-soft: #3A222C;
+  --green: #4FD6A9;
+  --orange: #FFB259;
+  --disabled: #39424D;
+
+  --review-1: #1E242B;
+  --review-2: #1A1F26;
+  --ok-bg: #15342B;
+  --ok-text: #8FE3C4;
+  --warn-bg: #33260F;
+  --warn-bg-2: #2A2010;
+  --warn-border: #4A3617;
+  --warn-text: #F0C88C;
+
+  --code-bg: #0F1216;
+  --inline-code-bg: #2A3037;
+  --inline-code-text: #FF8FAE;
+
+  --shadow-soft: rgba(0,0,0,0.35);
+  --shadow-mid: rgba(0,0,0,0.45);
+  --shadow-strong: rgba(0,0,0,0.6);
+  --inset-hi: rgba(255,255,255,0.04);
+  --ring-hi: rgba(255,255,255,0.07);
+  --veil: rgba(255,255,255,0.08);
+  --veil-2: rgba(255,255,255,0.07);
+  --glass: rgba(24,28,33,0.78);
+  --glass-border: rgba(255,255,255,0.07);
+  --overlay: rgba(0,0,0,0.62);
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; min-height: 100%; }
 body {
@@ -5,5 +136,28 @@ body {
     "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: var(--page-1);
+  color: var(--text);
 }
 button { font-family: inherit; }
+
+/* 붙여넣은 문제 본문 / 표 — 저장된 HTML에 밝은 테마 색이 박혀 있어도 테마를 따라가게 */
+.rte-editable table { border-collapse: collapse; }
+.rte-editable td, .rte-editable th {
+  border: 1px solid var(--border-strong);
+  padding: 6px 10px;
+}
+:root[data-theme="dark"] .rte-editable td,
+:root[data-theme="dark"] .rte-editable th {
+  color: var(--text) !important;
+  background-color: transparent !important;
+  border-color: var(--border-strong) !important;
+}
+:root[data-theme="dark"] .rte-editable tr:first-child td,
+:root[data-theme="dark"] .rte-editable tr:first-child th {
+  background-color: var(--fill) !important;
+}
+:root[data-theme="dark"] .rte-editable [style*="background"] {
+  background-color: transparent !important;
+}
+:root[data-theme="dark"] .rte-editable img { opacity: 0.92; }
