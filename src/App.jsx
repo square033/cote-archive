@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Plus, Sparkles, ChevronLeft, Trash2, Link as LinkIcon, Code2,
-  BookOpen, Loader2, Wand2, User, Heart, X, ClipboardList, Lightbulb, TriangleAlert, LogOut, LogIn
+  BookOpen, Loader2, Wand2, User, Heart, X, ClipboardList, Lightbulb, TriangleAlert, LogOut, LogIn,
+  Sun, Moon
 } from "lucide-react";
 import { supabase } from "./supabase";
 import AuthScreen from "./AuthScreen";
+import { isDark, useTheme } from "./theme";
 
 /* ───────────────────────── 상수 & 테마 ───────────────────────── */
 
@@ -16,7 +18,20 @@ const CATEGORIES = [
   { id: "dp", name: "다이나믹 프로그래밍", short: "DP", emoji: "🧩", bg: "#E4F0FF", deep: "#3182F6", grad: "linear-gradient(135deg,#CFE4FF,#EAF3FF)" },
   { id: "etc", name: "기타", short: "기타", emoji: "📦", bg: "#F2F4F6", deep: "#6B7684", grad: "linear-gradient(135deg,#E8EAED,#F4F6F8)" },
 ];
-const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.find((c) => c.id === "etc");
+// 다크 모드용 유형 색 (bg/deep/grad는 `${c.deep}40` 처럼 문자열로 이어 붙여 쓰기 때문에
+// CSS 변수가 아니라 실제 hex 값으로 둔다)
+const CATEGORIES_DARK = {
+  dfs: { bg: "#3A222C", deep: "#FF8FAE", grad: "linear-gradient(135deg,#3B2530,#241A1F)" },
+  dnc: { bg: "#2D2648", deep: "#B49CFF", grad: "linear-gradient(135deg,#2F2849,#1F1B2E)" },
+  bin: { bg: "#15342B", deep: "#4FD6A9", grad: "linear-gradient(135deg,#17372D,#13251F)" },
+  greedy: { bg: "#3B2B17", deep: "#FFB259", grad: "linear-gradient(135deg,#3D2D19,#251C12)" },
+  dp: { bg: "#16304F", deep: "#6FA9FF", grad: "linear-gradient(135deg,#183253,#141F2E)" },
+  etc: { bg: "#282D34", deep: "#A6B0BB", grad: "linear-gradient(135deg,#2A3037,#1E2226)" },
+};
+const catOf = (id) => {
+  const c = CATEGORIES.find((x) => x.id === id) || CATEGORIES.find((x) => x.id === "etc");
+  return isDark() ? { ...c, ...CATEGORIES_DARK[c.id] } : c;
+};
 
 // "기타" 안에서 다시 고르는 소분류
 const SUBCATEGORIES = [
@@ -38,22 +53,40 @@ const LEVELS = [
   { id: "lv4", name: "Lv.4", label: "어려움", color: "#E8923A", bg: "#FFF1DD" },
   { id: "lv5", name: "Lv.5", label: "최상", color: "#E0527A", bg: "#FFE9EF" },
 ];
-const levelOf = (id) => LEVELS.find((l) => l.id === id) || null;
+const LEVELS_DARK = {
+  lv0: { color: "#A6B0BB", bg: "#282D34" },
+  lv1: { color: "#4FD6A9", bg: "#15342B" },
+  lv2: { color: "#6FA9FF", bg: "#16304F" },
+  lv3: { color: "#B49CFF", bg: "#2D2648" },
+  lv4: { color: "#FFB259", bg: "#3B2B17" },
+  lv5: { color: "#FF8FAE", bg: "#3A222C" },
+};
+const levelOf = (id) => {
+  const l = LEVELS.find((x) => x.id === id);
+  if (!l) return null;
+  return isDark() ? { ...l, ...LEVELS_DARK[l.id] } : l;
+};
 
 const clay = {
   card: {
-    background: "#FFFFFF",
+    background: "var(--surface)",
     borderRadius: 24,
-    boxShadow: "0 10px 30px rgba(100,116,139,0.10), 0 2px 6px rgba(100,116,139,0.06), inset 0 1px 0 rgba(255,255,255,0.9)",
-    border: "1px solid rgba(255,255,255,0.7)",
+    boxShadow: "0 10px 30px var(--shadow-mid), 0 2px 6px var(--shadow-soft), inset 0 1px 0 var(--inset-hi)",
+    border: "1px solid var(--veil)",
   },
   glass: {
-    background: "rgba(255,255,255,0.72)",
+    background: "var(--glass)",
     backdropFilter: "blur(14px)",
     WebkitBackdropFilter: "blur(14px)",
-    border: "1px solid rgba(255,255,255,0.6)",
+    border: "1px solid var(--glass-border)",
   },
 };
+
+// hex면 알파 접미사(#RRGGBBAA)를 붙이고, CSS 변수면 color-mix로 투명도를 준다
+const withAlpha = (c, hexSuffix, ratio) =>
+  typeof c === "string" && /^#[0-9A-Fa-f]{6}$/.test(c)
+    ? c + hexSuffix
+    : `color-mix(in srgb, ${c} ${Math.round(ratio * 100)}%, transparent)`;
 
 const FONT = `"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif`;
 
@@ -200,10 +233,10 @@ function Chip({ active, color, children, onClick }) {
       style={{
         fontFamily: FONT, fontSize: 14, fontWeight: 600, cursor: "pointer",
         padding: "9px 16px", borderRadius: 999, transition: "all .2s",
-        background: active ? color.deep : "#FFFFFF",
-        color: active ? "#fff" : "#4E5968",
-        border: active ? "1px solid transparent" : "1px solid #E5E8EB",
-        boxShadow: active ? `0 6px 16px ${color.deep}40` : "0 2px 6px rgba(100,116,139,0.06)",
+        background: active ? color.deep : "var(--surface)",
+        color: active ? "#fff" : "var(--text-2)",
+        border: active ? "1px solid transparent" : "1px solid var(--border)",
+        boxShadow: active ? `0 6px 16px ${withAlpha(color.deep, "40", 0.25)}` : "0 2px 6px var(--shadow-soft)",
       }}
     >
       {children}
@@ -232,7 +265,7 @@ function PrimaryBtn({ children, onClick, disabled, color = "#3182F6", style }) {
       onClick={onClick} disabled={disabled}
       style={{
         fontFamily: FONT, fontWeight: 700, fontSize: 15, color: "#fff",
-        background: disabled ? "#B0C4DE" : color, border: "none", cursor: disabled ? "default" : "pointer",
+        background: disabled ? "var(--disabled)" : color, border: "none", cursor: disabled ? "default" : "pointer",
         padding: "12px 22px", borderRadius: 16, display: "inline-flex", alignItems: "center", gap: 8,
         boxShadow: disabled ? "none" : `0 8px 20px ${color}45`, transition: "transform .15s, box-shadow .15s",
         ...style,
@@ -253,8 +286,8 @@ function MemoView({ text }) {
   // ``` 기준으로 코드블록/일반텍스트 번갈아 분리
   const blocks = text.split(/```/);
   return (
-    <div style={{ margin: "0 0 10px", background: "#F7F9FC", borderRadius: 12, padding: "10px 12px" }}>
-      <div style={{ fontSize: 13.5, color: "#6B7684" }}>
+    <div style={{ margin: "0 0 10px", background: "var(--surface-3)", borderRadius: 12, padding: "10px 12px" }}>
+      <div style={{ fontSize: 13.5, color: "var(--text-3)" }}>
         <span style={{ marginRight: 4 }}>📝</span>
         {blocks.map((block, i) => {
           if (i % 2 === 1) {
@@ -265,7 +298,7 @@ function MemoView({ text }) {
             const codeBody = knownLang ? lines.slice(1).join("\n") : block.replace(/^\n/, "");
             return (
               <pre key={i} style={{
-                fontFamily: mono, margin: "8px 0", background: "#191F28", color: "#E8F0FE",
+                fontFamily: mono, margin: "8px 0", background: "var(--code-bg)", color: "var(--code-text)",
                 borderRadius: 10, padding: "12px 14px", fontSize: 12.5, lineHeight: 1.55, overflowX: "auto",
                 whiteSpace: "pre",
               }}>{codeBody.replace(/\n$/, "")}</pre>
@@ -277,7 +310,7 @@ function MemoView({ text }) {
             <span key={i} style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
               {parts.map((part, j) =>
                 j % 2 === 1
-                  ? <code key={j} style={{ fontFamily: mono, background: "#E8EAED", color: "#D6336C", borderRadius: 5, padding: "1px 5px", fontSize: 12.5 }}>{part}</code>
+                  ? <code key={j} style={{ fontFamily: mono, background: "var(--inline-code-bg)", color: "var(--inline-code-text)", borderRadius: 5, padding: "1px 5px", fontSize: 12.5 }}>{part}</code>
                   : <span key={j}>{part}</span>
               )}
             </span>
@@ -293,16 +326,16 @@ function MemoView({ text }) {
 function ReviewCard({ review }) {
   if (!review) return null;
   return (
-    <div style={{ ...clay.card, borderRadius: 20, padding: 20, marginTop: 12, background: "linear-gradient(160deg,#FBFCFF,#F4F8FF)" }}>
+    <div style={{ ...clay.card, borderRadius: 20, padding: 20, marginTop: 12, background: "linear-gradient(160deg,var(--review-1),var(--review-2))" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <Sparkles size={18} color="#7C5CE0" />
-        <span style={{ fontWeight: 800, fontSize: 15, color: "#191F28" }}>AI 코드 리뷰</span>
+        <Sparkles size={18} color="var(--purple)" />
+        <span style={{ fontWeight: 800, fontSize: 15, color: "var(--text)" }}>AI 코드 리뷰</span>
       </div>
 
-      <p style={{ margin: "0 0 14px", fontSize: 14.5, color: "#333D4B", lineHeight: 1.6 }}>{review.summary}</p>
+      <p style={{ margin: "0 0 14px", fontSize: 14.5, color: "var(--text-1)", lineHeight: 1.6 }}>{review.summary}</p>
 
       {/* 알고리즘 정리 표 */}
-      <div style={{ overflow: "hidden", borderRadius: 14, border: "1px solid #E5E8EB", marginBottom: 14 }}>
+      <div style={{ overflow: "hidden", borderRadius: 14, border: "1px solid var(--border)", marginBottom: 14 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
           <tbody>
             {[
@@ -310,9 +343,9 @@ function ReviewCard({ review }) {
               ["시간 복잡도", review.timeComplexity],
               ["공간 복잡도", review.spaceComplexity],
             ].map(([k, v]) => (
-              <tr key={k} style={{ borderBottom: "1px solid #F2F4F6" }}>
-                <td style={{ padding: "10px 14px", fontWeight: 700, color: "#6B7684", background: "#F9FAFB", width: 110, whiteSpace: "nowrap" }}>{k}</td>
-                <td style={{ padding: "10px 14px", color: "#191F28" }}>{v || "-"}</td>
+              <tr key={k} style={{ borderBottom: "1px solid var(--fill)" }}>
+                <td style={{ padding: "10px 14px", fontWeight: 700, color: "var(--text-3)", background: "var(--surface-2)", width: 110, whiteSpace: "nowrap" }}>{k}</td>
+                <td style={{ padding: "10px 14px", color: "var(--text)" }}>{v || "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -322,7 +355,7 @@ function ReviewCard({ review }) {
       {/* 핵심 수식 */}
       {review.formula && review.formula !== "null" && (
         <div style={{
-          background: "#191F28", color: "#9EEFC9", borderRadius: 14, padding: "14px 16px",
+          background: "var(--code-bg)", color: "var(--code-str)", borderRadius: 14, padding: "14px 16px",
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13.5, marginBottom: 14,
           overflowX: "auto", whiteSpace: "pre-wrap",
         }}>
@@ -333,19 +366,19 @@ function ReviewCard({ review }) {
       {/* 단계별 정리 */}
       {Array.isArray(review.steps) && review.steps.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5, color: "#6B7684", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--text-3)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
             <ClipboardList size={15} /> 단계별 흐름
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {review.steps.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, background: "#fff", border: "1px solid #EFF1F4", borderRadius: 12, padding: "10px 12px" }}>
+              <div key={i} style={{ display: "flex", gap: 10, background: "var(--surface)", border: "1px solid var(--fill-2)", borderRadius: 12, padding: "10px 12px" }}>
                 <div style={{
-                  minWidth: 24, height: 24, borderRadius: 999, background: "#E4F0FF", color: "#3182F6",
+                  minWidth: 24, height: 24, borderRadius: 999, background: "var(--accent-soft)", color: "var(--accent)",
                   fontWeight: 800, fontSize: 12.5, display: "flex", alignItems: "center", justifyContent: "center",
                 }}>{i + 1}</div>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, color: "#191F28" }}>{s.name}</div>
-                  <div style={{ fontSize: 13, color: "#6B7684", lineHeight: 1.5 }}>{s.desc}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--text)" }}>{s.name}</div>
+                  <div style={{ fontSize: 13, color: "var(--text-3)", lineHeight: 1.5 }}>{s.desc}</div>
                 </div>
               </div>
             ))}
@@ -355,15 +388,15 @@ function ReviewCard({ review }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
         {Array.isArray(review.goodPoints) && review.goodPoints.length > 0 && (
-          <div style={{ background: "#E9FBF3", borderRadius: 14, padding: "12px 14px" }}>
-            <div style={{ fontWeight: 800, fontSize: 13, color: "#1FA97E", marginBottom: 6, display: "flex", gap: 6, alignItems: "center" }}><Heart size={14} /> 잘한 점</div>
-            {review.goodPoints.map((g, i) => <div key={i} style={{ fontSize: 13, color: "#2A6E57", lineHeight: 1.6 }}>· {g}</div>)}
+          <div style={{ background: "var(--ok-bg)", borderRadius: 14, padding: "12px 14px" }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: "var(--green)", marginBottom: 6, display: "flex", gap: 6, alignItems: "center" }}><Heart size={14} /> 잘한 점</div>
+            {review.goodPoints.map((g, i) => <div key={i} style={{ fontSize: 13, color: "var(--ok-text)", lineHeight: 1.6 }}>· {g}</div>)}
           </div>
         )}
         {Array.isArray(review.improvements) && review.improvements.length > 0 && (
-          <div style={{ background: "#FFF5E6", borderRadius: 14, padding: "12px 14px" }}>
-            <div style={{ fontWeight: 800, fontSize: 13, color: "#E8923A", marginBottom: 6, display: "flex", gap: 6, alignItems: "center" }}><Lightbulb size={14} /> 개선 아이디어</div>
-            {review.improvements.map((g, i) => <div key={i} style={{ fontSize: 13, color: "#8A5A22", lineHeight: 1.6 }}>· {g}</div>)}
+          <div style={{ background: "var(--warn-bg)", borderRadius: 14, padding: "12px 14px" }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: "var(--orange)", marginBottom: 6, display: "flex", gap: 6, alignItems: "center" }}><Lightbulb size={14} /> 개선 아이디어</div>
+            {review.improvements.map((g, i) => <div key={i} style={{ fontSize: 13, color: "var(--warn-text)", lineHeight: 1.6 }}>· {g}</div>)}
           </div>
         )}
       </div>
@@ -383,7 +416,14 @@ const LANGUAGES = [
   { id: "c", name: "C", color: "#6B7684" },
   { id: "etc", name: "기타", color: "#8B95A1" },
 ];
-const langOf = (id) => LANGUAGES.find((l) => l.id === id) || LANGUAGES.find((l) => l.id === "etc");
+const LANGUAGES_DARK = {
+  cpp: "#6FA9FF", python: "#4FD6A9", java: "#FFB259",
+  javascript: "#F2CE4B", c: "#A6B0BB", etc: "#8F99A4",
+};
+const langOf = (id) => {
+  const l = LANGUAGES.find((x) => x.id === id) || LANGUAGES.find((x) => x.id === "etc");
+  return isDark() ? { ...l, color: LANGUAGES_DARK[l.id] } : l;
+};
 
 // 키워드 사전 (언어별) — 정규식으로 토큰화해서 색칠하는 가벼운 하이라이터
 const KEYWORDS = {
@@ -421,13 +461,13 @@ function sanitizeBody(html) {
       t.style.background = "";
     });
     box.querySelectorAll("table td, table th").forEach((cell) => {
-      cell.style.color = "#191F28";
+      cell.style.color = "var(--text)";
       cell.style.background = "";
-      cell.style.border = "1px solid #D8DCE2";
+      cell.style.border = "1px solid var(--border-strong)";
       cell.style.padding = "7px 11px";
     });
     box.querySelectorAll("table tr:first-child td, table tr:first-child th").forEach((cell) => {
-      cell.style.background = "#F2F4F6";
+      cell.style.background = "var(--fill)";
       cell.style.fontWeight = "700";
     });
     return box.innerHTML;
@@ -448,13 +488,13 @@ function highlightCode(code, lang) {
     result += escapeHtml(code.slice(last, m.index));
     const [full, lineComment, blockComment, hashComment, dquote, squote, num, word] = m;
     if (lineComment || blockComment || hashComment) {
-      result += `<span style="color:#6B8A99">${escapeHtml(full)}</span>`;
+      result += `<span style="color:var(--code-comment)">${escapeHtml(full)}</span>`;
     } else if (dquote || squote) {
-      result += `<span style="color:#9EEFC9">${escapeHtml(full)}</span>`;
+      result += `<span style="color:var(--code-str)">${escapeHtml(full)}</span>`;
     } else if (num) {
-      result += `<span style="color:#FFB86C">${escapeHtml(full)}</span>`;
+      result += `<span style="color:var(--code-num)">${escapeHtml(full)}</span>`;
     } else if (word && kwSet.has(word)) {
-      result += `<span style="color:#82AAFF;font-weight:700">${escapeHtml(full)}</span>`;
+      result += `<span style="color:var(--code-kw);font-weight:700">${escapeHtml(full)}</span>`;
     } else {
       result += escapeHtml(full);
     }
@@ -528,11 +568,11 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
     });
     // 표는 우리 스타일로 다시 정리
     el.querySelectorAll("table td, table th").forEach((cell) => {
-      cell.style.color = "#191F28";
+      cell.style.color = "var(--text)";
       cell.style.background = "";
     });
     el.querySelectorAll("table tr:first-child td, table tr:first-child th").forEach((cell) => {
-      cell.style.background = "#F2F4F6";
+      cell.style.background = "var(--fill)";
     });
     onChange(el.innerHTML || "");
   };
@@ -546,8 +586,8 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
 
   // 깔끔한 표 HTML 생성 (헤더행 강조)
   const buildTable = (rows, cols) => {
-    const cellStyle = "border:1px solid #D8DCE2;padding:7px 11px;font-size:14px;";
-    const headStyle = cellStyle + "background:#F2F4F6;font-weight:700;";
+    const cellStyle = "border:1px solid var(--border-strong);padding:7px 11px;font-size:14px;";
+    const headStyle = cellStyle + "background:var(--fill);font-weight:700;";
     let html = `<table style="border-collapse:collapse;width:100%;margin:8px 0;"><tbody>`;
     for (let r = 0; r < rows; r++) {
       html += "<tr>";
@@ -575,14 +615,14 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
       t.style.margin = "8px 0";
       t.removeAttribute("border");
       t.querySelectorAll("td,th").forEach((cell, i) => {
-        cell.style.border = "1px solid #D8DCE2";
+        cell.style.border = "1px solid var(--border-strong)";
         cell.style.padding = "7px 11px";
         cell.style.fontSize = "14px";
       });
       // 첫 행 헤더 느낌
       const firstRow = t.querySelector("tr");
       if (firstRow) firstRow.querySelectorAll("td,th").forEach((cell) => {
-        cell.style.background = "#F2F4F6";
+        cell.style.background = "var(--fill)";
         cell.style.fontWeight = "700";
       });
     });
@@ -594,8 +634,8 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
     if (rows.length < 1) return null;
     const hasTab = rows.some((r) => r.includes("\t"));
     if (!hasTab && rows.length < 2) return null; // 표로 보기 어려움
-    const cellStyle = "border:1px solid #D8DCE2;padding:7px 11px;font-size:14px;";
-    const headStyle = cellStyle + "background:#F2F4F6;font-weight:700;";
+    const cellStyle = "border:1px solid var(--border-strong);padding:7px 11px;font-size:14px;";
+    const headStyle = cellStyle + "background:var(--fill);font-weight:700;";
     let html = `<table style="border-collapse:collapse;width:100%;margin:8px 0;"><tbody>`;
     rows.forEach((row, ri) => {
       const cells = hasTab ? row.split("\t") : [row];
@@ -610,36 +650,36 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
   };
 
   const btn = (active) => ({
-    fontFamily: FONT, border: "1.5px solid " + (active ? "#3182F6" : "#E5E8EB"),
-    background: active ? "#E4F0FF" : "#fff", color: active ? "#3182F6" : "#6B7684",
+    fontFamily: FONT, border: "1.5px solid " + (active ? "var(--accent)" : "var(--border)"),
+    background: active ? "var(--accent-soft)" : "var(--surface)", color: active ? "var(--accent)" : "var(--text-3)",
     borderRadius: 9, width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
     cursor: "pointer", fontWeight: 800, fontSize: 13.5, flexShrink: 0,
   });
 
   return (
-    <div style={{ border: "1.5px solid " + (focused ? "#3182F6" : "#E5E8EB"), borderRadius: 14, overflow: "hidden", background: "#FAFBFC" }}>
+    <div style={{ border: "1.5px solid " + (focused ? "var(--accent)" : "var(--border)"), borderRadius: 14, overflow: "hidden", background: "var(--surface-2)" }}>
       {/* 툴바 */}
-      <div style={{ display: "flex", gap: 6, padding: "8px 10px", borderBottom: "1px solid #EFF1F4", flexWrap: "wrap", background: "#F7F9FC" }}>
+      <div style={{ display: "flex", gap: 6, padding: "8px 10px", borderBottom: "1px solid var(--fill-2)", flexWrap: "wrap", background: "var(--surface-3)" }}>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("bold")} style={btn(false)} title="굵게">B</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("italic")} style={{ ...btn(false), fontStyle: "italic" }} title="기울임">I</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("underline")} style={{ ...btn(false), textDecoration: "underline" }} title="밑줄">U</button>
-        <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
+        <div style={{ width: 1, background: "var(--border)", margin: "2px 4px" }} />
 
         {/* 글자 색 */}
         <div style={{ position: "relative" }}>
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setShowColor(!showColor); setShowSize(false); }} style={btn(showColor)} title="글자 색">
-            <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 4, background: "linear-gradient(135deg,#3182F6,#E0527A)" }} />
+            <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 4, background: "linear-gradient(135deg,var(--accent),var(--pink))" }} />
           </button>
           {showColor && (
             <div onMouseDown={(e) => e.preventDefault()} style={{
-              position: "absolute", top: 38, left: 0, zIndex: 20, background: "#fff", borderRadius: 14,
-              boxShadow: "0 10px 30px rgba(100,116,139,0.22)", border: "1px solid #EFF1F4", padding: 12,
+              position: "absolute", top: 38, left: 0, zIndex: 20, background: "var(--surface)", borderRadius: 14,
+              boxShadow: "0 10px 30px var(--shadow-strong)", border: "1px solid var(--fill-2)", padding: 12,
               display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, width: 160,
             }}>
               {COLORS.map((col) => (
                 <button key={col} type="button" onClick={() => applyColor(col)} title={col} style={{
-                  width: 28, height: 28, borderRadius: 8, background: col, border: "2px solid #fff",
-                  boxShadow: "0 0 0 1px #E5E8EB", cursor: "pointer",
+                  width: 28, height: 28, borderRadius: 8, background: col, border: "2px solid var(--surface)",
+                  boxShadow: "0 0 0 1px var(--border)", cursor: "pointer",
                 }} />
               ))}
             </div>
@@ -651,16 +691,16 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setShowSize(!showSize); setShowColor(false); }} style={{ ...btn(showSize), fontSize: 12 }} title="글자 크기">가</button>
           {showSize && (
             <div onMouseDown={(e) => e.preventDefault()} style={{
-              position: "absolute", top: 38, left: 0, zIndex: 20, background: "#fff", borderRadius: 14,
-              boxShadow: "0 10px 30px rgba(100,116,139,0.22)", border: "1px solid #EFF1F4", padding: 8, width: 120,
+              position: "absolute", top: 38, left: 0, zIndex: 20, background: "var(--surface)", borderRadius: 14,
+              boxShadow: "0 10px 30px var(--shadow-strong)", border: "1px solid var(--fill-2)", padding: 8, width: 120,
             }}>
               {SIZES.map((s) => (
                 <button key={s.px} type="button" onClick={() => applySize(s.px)} style={{
                   fontFamily: FONT, display: "block", width: "100%", textAlign: "left", border: "none",
                   background: "transparent", cursor: "pointer", padding: "7px 10px", borderRadius: 8,
-                  fontSize: s.px, color: "#191F28", fontWeight: 600,
+                  fontSize: s.px, color: "var(--text)", fontWeight: 600,
                 }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#F2F4F6"}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "var(--fill)"}
                   onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                 >{s.label}</button>
               ))}
@@ -668,31 +708,31 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
           )}
         </div>
 
-        <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
+        <div style={{ width: 1, background: "var(--border)", margin: "2px 4px" }} />
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyLeft")} style={btn(false)} title="왼쪽 정렬">⬅</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyCenter")} style={btn(false)} title="가운데 정렬">↔</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("justifyRight")} style={btn(false)} title="오른쪽 정렬">➡</button>
-        <div style={{ width: 1, background: "#E5E8EB", margin: "2px 4px" }} />
+        <div style={{ width: 1, background: "var(--border)", margin: "2px 4px" }} />
         <div style={{ position: "relative" }}>
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setShowTablePicker(!showTablePicker)} style={btn(showTablePicker)} title="표 삽입">⊞</button>
           {showTablePicker && (
             <div onMouseDown={(e) => e.preventDefault()} style={{
-              position: "absolute", top: 38, left: 0, zIndex: 20, background: "#fff", borderRadius: 14,
-              boxShadow: "0 10px 30px rgba(100,116,139,0.22)", border: "1px solid #EFF1F4", padding: 14, width: 200,
+              position: "absolute", top: 38, left: 0, zIndex: 20, background: "var(--surface)", borderRadius: 14,
+              boxShadow: "0 10px 30px var(--shadow-strong)", border: "1px solid var(--fill-2)", padding: 14, width: 200,
             }}>
-              <div style={{ fontSize: 12.5, fontWeight: 800, color: "#191F28", marginBottom: 10 }}>표 만들기</div>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>표 만들기</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 12.5, color: "#6B7684", width: 28 }}>행</span>
+                <span style={{ fontSize: 12.5, color: "var(--text-3)", width: 28 }}>행</span>
                 <input type="number" min={1} max={20} value={tRows} onChange={(e) => setTRows(Math.max(1, Math.min(20, +e.target.value || 1)))}
-                  style={{ fontFamily: FONT, flex: 1, border: "1.5px solid #E5E8EB", borderRadius: 9, padding: "6px 10px", fontSize: 13, outline: "none" }} />
+                  style={{ fontFamily: FONT, flex: 1, border: "1.5px solid var(--border)", borderRadius: 9, padding: "6px 10px", fontSize: 13, outline: "none" }} />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 12.5, color: "#6B7684", width: 28 }}>열</span>
+                <span style={{ fontSize: 12.5, color: "var(--text-3)", width: 28 }}>열</span>
                 <input type="number" min={1} max={10} value={tCols} onChange={(e) => setTCols(Math.max(1, Math.min(10, +e.target.value || 1)))}
-                  style={{ fontFamily: FONT, flex: 1, border: "1.5px solid #E5E8EB", borderRadius: 9, padding: "6px 10px", fontSize: 13, outline: "none" }} />
+                  style={{ fontFamily: FONT, flex: 1, border: "1.5px solid var(--border)", borderRadius: 9, padding: "6px 10px", fontSize: 13, outline: "none" }} />
               </div>
               <button type="button" onClick={insertTable} style={{
-                fontFamily: FONT, width: "100%", border: "none", background: "#3182F6", color: "#fff",
+                fontFamily: FONT, width: "100%", border: "none", background: "var(--accent-btn)", color: "#fff",
                 borderRadius: 10, padding: "8px 0", fontWeight: 700, fontSize: 13, cursor: "pointer",
               }}>{tRows} × {tCols} 표 삽입</button>
             </div>
@@ -737,14 +777,14 @@ function RichTextEditor({ value, onChange, placeholder, minHeight = 160 }) {
         data-placeholder={placeholder}
         className="rte-editable"
         style={{
-          minHeight, padding: "12px 14px", fontSize: 14.5, lineHeight: 1.7, color: "#191F28",
+          minHeight, padding: "12px 14px", fontSize: 14.5, lineHeight: 1.7, color: "var(--text)",
           outline: "none", fontFamily: FONT, overflowX: "auto",
         }}
       />
       <style>{`
-        .rte-editable:empty:before { content: attr(data-placeholder); color: #A8B1BD; }
+        .rte-editable:empty:before { content: attr(data-placeholder); color: var(--text-5); }
         .rte-editable table { border-collapse: collapse; }
-        .rte-editable td, .rte-editable th { border: 1px solid #D8DCE2; padding: 6px 10px; }
+        .rte-editable td, .rte-editable th { border: 1px solid var(--border-strong); padding: 6px 10px; }
       `}</style>
     </div>
   );
@@ -787,14 +827,14 @@ function AddModal({ onClose, onSave }) {
     }
   };
 
-  const input = { fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 14, padding: "12px 14px", fontSize: 14.5, outline: "none", background: "#FAFBFC", color: "#191F28" };
+  const input = { fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid var(--border)", borderRadius: 14, padding: "12px 14px", fontSize: 14.5, outline: "none", background: "var(--surface-2)", color: "var(--text)" };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(25,31,40,0.45)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+    <div style={{ position: "fixed", inset: 0, background: "var(--overlay)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ ...clay.card, width: "100%", maxWidth: 620, maxHeight: "90vh", overflowY: "auto", padding: 24, borderRadius: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#191F28" }}>새 문제 등록</h2>
-          <button onClick={onClose} style={{ border: "none", background: "#F2F4F6", borderRadius: 999, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} color="#6B7684" /></button>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--text)" }}>새 문제 등록</h2>
+          <button onClick={onClose} style={{ border: "none", background: "var(--fill)", borderRadius: 999, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={16} color="var(--text-3)" /></button>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -802,7 +842,7 @@ function AddModal({ onClose, onSave }) {
           <input style={input} placeholder="문제 링크 (선택)" value={url} onChange={(e) => setUrl(e.target.value)} />
 
           <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8B95A1", marginBottom: 6 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-4)", marginBottom: 6 }}>
               문제 내용 — 굵게·정렬·표 사용 가능, 엑셀/표 복사 붙여넣기도 인식돼요
             </div>
             <RichTextEditor value={body} onChange={setBody} placeholder="문제 내용을 작성하거나 붙여넣어 주세요. AI가 이 내용을 보고 유형을 분류해요." minHeight={150} />
@@ -810,32 +850,32 @@ function AddModal({ onClose, onSave }) {
 
           {/* 난이도(레벨) */}
           <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8B95A1", marginBottom: 6 }}>난이도</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-4)", marginBottom: 6 }}>난이도</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {LEVELS.map((l) => (
                 <button key={l.id} onClick={() => setLevel(l.id)} style={{
                   fontFamily: FONT, flex: "1 1 90px", padding: "9px 0", borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: "pointer",
-                  border: level === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
-                  background: level === l.id ? l.bg : "#fff", color: level === l.id ? l.color : "#6B7684",
+                  border: level === l.id ? `1.5px solid ${l.color}` : "1.5px solid var(--border)",
+                  background: level === l.id ? l.bg : "var(--surface)", color: level === l.id ? l.color : "var(--text-3)",
                 }}>{l.name} <span style={{ fontWeight: 600, fontSize: 11.5 }}>· {l.label}</span></button>
               ))}
             </div>
           </div>
 
           {/* 분류 방식 */}
-          <div style={{ background: "#F7F9FC", borderRadius: 18, padding: 14 }}>
+          <div style={{ background: "var(--surface-3)", borderRadius: 18, padding: 14 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               {[["ai", "AI 자동 분류", <Wand2 size={15} key="w" />], ["manual", "직접 선택", <BookOpen size={15} key="b" />]].map(([m, label, icon]) => (
                 <button key={m} onClick={() => setMode(m)} style={{
                   fontFamily: FONT, flex: 1, padding: "10px 0", borderRadius: 12, fontWeight: 700, fontSize: 14, cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .15s",
-                  border: mode === m ? "1.5px solid #3182F6" : "1.5px solid #E5E8EB",
-                  background: mode === m ? "#E4F0FF" : "#fff", color: mode === m ? "#3182F6" : "#6B7684",
+                  border: mode === m ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+                  background: mode === m ? "var(--accent-soft)" : "var(--surface)", color: mode === m ? "var(--accent)" : "var(--text-3)",
                 }}>{icon}{label}</button>
               ))}
             </div>
             {mode === "ai" ? (
-              <p style={{ margin: 0, fontSize: 13, color: "#6B7684", lineHeight: 1.5 }}>등록 버튼을 누르면 문제 내용을 분석해 6가지 유형 중 하나로 자동 분류해요. ✨</p>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--text-3)", lineHeight: 1.5 }}>등록 버튼을 누르면 문제 내용을 분석해 6가지 유형 중 하나로 자동 분류해요. ✨</p>
             ) : (
               <div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -845,14 +885,14 @@ function AddModal({ onClose, onSave }) {
                 </div>
                 {/* 기타를 고르면 소분류가 펼쳐짐 */}
                 {manualCat === "etc" && (
-                  <div style={{ marginTop: 10, padding: "12px 14px", background: "#fff", border: "1.5px dashed #D8DCE2", borderRadius: 14 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "#6B7684", marginBottom: 8 }}>📦 기타 — 소분류 선택</div>
+                  <div style={{ marginTop: 10, padding: "12px 14px", background: "var(--surface)", border: "1.5px dashed var(--border-strong)", borderRadius: 14 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--text-3)", marginBottom: 8 }}>📦 기타 — 소분류 선택</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {SUBCATEGORIES.map((s) => (
                         <button key={s.id} type="button" onClick={() => setSubCat(s.id)} style={{
                           fontFamily: FONT, padding: "6px 13px", borderRadius: 999, fontWeight: 700, fontSize: 12.5, cursor: "pointer",
-                          border: subCat === s.id ? "1.5px solid #6B7684" : "1.5px solid #E5E8EB",
-                          background: subCat === s.id ? "#F2F4F6" : "#fff", color: subCat === s.id ? "#191F28" : "#8B95A1",
+                          border: subCat === s.id ? "1.5px solid var(--text-3)" : "1.5px solid var(--border)",
+                          background: subCat === s.id ? "var(--fill)" : "var(--surface)", color: subCat === s.id ? "var(--text)" : "var(--text-4)",
                         }}>{s.name}</button>
                       ))}
                     </div>
@@ -862,7 +902,7 @@ function AddModal({ onClose, onSave }) {
             )}
           </div>
 
-          {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600 }}><TriangleAlert size={15} />{err}</div>}
+          {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--pink)", fontSize: 13.5, fontWeight: 600 }}><TriangleAlert size={15} />{err}</div>}
 
           <PrimaryBtn onClick={save} disabled={busy} style={{ justifyContent: "center" }}>
             {busy ? (<><Loader2 size={17} className="spin" /> AI가 유형을 분류하는 중…</>) : (<><Plus size={17} /> 문제 등록하기</>)}
@@ -960,8 +1000,8 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
       {LANGUAGES.map((l) => (
         <button key={l.id} type="button" onClick={() => onChange(l.id)} style={{
           fontFamily: FONT, padding: "5px 11px", borderRadius: 999, fontWeight: 700, fontSize: 12, cursor: "pointer",
-          border: value === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
-          background: value === l.id ? l.color + "22" : "#fff", color: value === l.id ? l.color : "#8B95A1",
+          border: value === l.id ? `1.5px solid ${l.color}` : "1.5px solid var(--border)",
+          background: value === l.id ? l.color + "22" : "var(--surface)", color: value === l.id ? l.color : "var(--text-4)",
         }}>{l.name}</button>
       ))}
     </div>
@@ -969,12 +1009,12 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 16px 80px" }}>
-      <button onClick={onBack} style={{ fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "transparent", color: "#6B7684", fontWeight: 700, fontSize: 14, cursor: "pointer", padding: "16px 0" }}>
+      <button onClick={onBack} style={{ fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 4, border: "none", background: "transparent", color: "var(--text-3)", fontWeight: 700, fontSize: 14, cursor: "pointer", padding: "16px 0" }}>
         <ChevronLeft size={18} /> 목록으로
       </button>
 
       {/* 헤더 카드 */}
-      <div style={{ ...clay.card, padding: 24, background: c.grad, border: "1px solid rgba(255,255,255,0.8)" }}>
+      <div style={{ ...clay.card, padding: 24, background: c.grad, border: "1px solid var(--ring-hi)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -985,62 +1025,62 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                 </span>
               )}
               <button onClick={() => setEditingMeta(!editingMeta)} style={{
-                fontFamily: FONT, border: "none", background: "rgba(255,255,255,0.65)", color: "#4E5968",
+                fontFamily: FONT, border: "none", background: "var(--veil-2)", color: "var(--text-2)",
                 borderRadius: 999, padding: "6px 12px", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
               }}>{editingMeta ? "닫기" : "✏️ 유형·난이도 변경"}</button>
             </div>
 
             {editingMeta && (
-              <div style={{ background: "rgba(255,255,255,0.7)", borderRadius: 16, padding: 14, marginTop: 12 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: "#6B7684", marginBottom: 6 }}>유형</div>
+              <div style={{ background: "var(--veil)", borderRadius: 16, padding: 14, marginTop: 12 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--text-3)", marginBottom: 6 }}>유형</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                   {CATEGORIES.map((cat) => (
                     <button key={cat.id} onClick={() => setCategory(cat.id)} style={{
                       fontFamily: FONT, padding: "6px 12px", borderRadius: 999, fontWeight: 700, fontSize: 12.5, cursor: "pointer",
-                      border: problem.category === cat.id ? `1.5px solid ${cat.deep}` : "1.5px solid #E5E8EB",
-                      background: problem.category === cat.id ? cat.bg : "#fff", color: problem.category === cat.id ? cat.deep : "#8B95A1",
+                      border: problem.category === cat.id ? `1.5px solid ${cat.deep}` : "1.5px solid var(--border)",
+                      background: problem.category === cat.id ? cat.bg : "var(--surface)", color: problem.category === cat.id ? cat.deep : "var(--text-4)",
                     }}>{cat.emoji} {cat.name}</button>
                   ))}
                 </div>
                 {/* 기타면 소분류 선택 */}
                 {problem.category === "etc" && (
                   <>
-                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "#6B7684", marginBottom: 6 }}>📦 기타 소분류</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--text-3)", marginBottom: 6 }}>📦 기타 소분류</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                       {SUBCATEGORIES.map((s) => (
                         <button key={s.id} onClick={() => setSubCategory(s.id)} style={{
                           fontFamily: FONT, padding: "6px 12px", borderRadius: 999, fontWeight: 700, fontSize: 12.5, cursor: "pointer",
-                          border: problem.subCategory === s.id ? "1.5px solid #6B7684" : "1.5px solid #E5E8EB",
-                          background: problem.subCategory === s.id ? "#F2F4F6" : "#fff", color: problem.subCategory === s.id ? "#191F28" : "#8B95A1",
+                          border: problem.subCategory === s.id ? "1.5px solid var(--text-3)" : "1.5px solid var(--border)",
+                          background: problem.subCategory === s.id ? "var(--fill)" : "var(--surface)", color: problem.subCategory === s.id ? "var(--text)" : "var(--text-4)",
                         }}>{s.name}</button>
                       ))}
                     </div>
                   </>
                 )}
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: "#6B7684", marginBottom: 6 }}>난이도</div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--text-3)", marginBottom: 6 }}>난이도</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {LEVELS.map((l) => (
                     <button key={l.id} onClick={() => setLevel(l.id)} style={{
                       fontFamily: FONT, padding: "6px 12px", borderRadius: 999, fontWeight: 800, fontSize: 12.5, cursor: "pointer",
-                      border: problem.level === l.id ? `1.5px solid ${l.color}` : "1.5px solid #E5E8EB",
-                      background: problem.level === l.id ? l.bg : "#fff", color: problem.level === l.id ? l.color : "#8B95A1",
+                      border: problem.level === l.id ? `1.5px solid ${l.color}` : "1.5px solid var(--border)",
+                      background: problem.level === l.id ? l.bg : "var(--surface)", color: problem.level === l.id ? l.color : "var(--text-4)",
                     }}>{l.name} · {l.label}</button>
                   ))}
                 </div>
               </div>
             )}
 
-            <h1 style={{ margin: "12px 0 6px", fontSize: 24, fontWeight: 800, color: "#191F28", lineHeight: 1.3 }}>{problem.title}</h1>
+            <h1 style={{ margin: "12px 0 6px", fontSize: 24, fontWeight: 800, color: "var(--text)", lineHeight: 1.3 }}>{problem.title}</h1>
             {problem.aiReason && <p style={{ margin: 0, fontSize: 13, color: c.deep, fontWeight: 600 }}>✨ AI 분류 이유 · {problem.aiReason}</p>}
             {problem.url && (
-              <a href={problem.url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 10, fontSize: 13.5, color: "#3182F6", fontWeight: 700, textDecoration: "none" }}>
+              <a href={problem.url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 10, fontSize: 13.5, color: "var(--accent)", fontWeight: 700, textDecoration: "none" }}>
                 <LinkIcon size={14} /> 문제 바로가기
               </a>
             )}
           </div>
           <button onClick={() => { if (confirm("이 문제와 저장된 풀이를 모두 삭제할까요?")) onDelete(problem.id); }}
-            style={{ border: "none", background: "rgba(255,255,255,0.7)", borderRadius: 12, padding: 8, cursor: "pointer" }}>
-            <Trash2 size={16} color="#E0527A" />
+            style={{ border: "none", background: "var(--veil)", borderRadius: 12, padding: 8, cursor: "pointer" }}>
+            <Trash2 size={16} color="var(--pink)" />
           </button>
         </div>
       </div>
@@ -1048,12 +1088,12 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
       {/* 문제 내용 — 보기 / 수정 */}
       <div style={{ ...clay.card, marginTop: 14, padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button onClick={() => setShowBody(!showBody)} style={{ fontFamily: FONT, border: "none", background: "transparent", fontWeight: 800, fontSize: 15, color: "#191F28", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0 }}>
+          <button onClick={() => setShowBody(!showBody)} style={{ fontFamily: FONT, border: "none", background: "transparent", fontWeight: 800, fontSize: 15, color: "var(--text)", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0 }}>
             <BookOpen size={16} color={c.deep} /> 문제 내용 {showBody ? "접기" : "펼치기"}
           </button>
           {showBody && !editingBody && (
             <button onClick={() => { setBodyDraft(problem.body || ""); setEditingBody(true); }} style={{
-              fontFamily: FONT, border: "none", background: "#E4F0FF", color: "#3182F6", borderRadius: 999,
+              fontFamily: FONT, border: "none", background: "var(--accent-soft)", color: "var(--accent)", borderRadius: 999,
               padding: "6px 12px", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
             }}>✏️ 수정</button>
           )}
@@ -1065,14 +1105,14 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
               <RichTextEditor value={bodyDraft} onChange={setBodyDraft} placeholder="문제 내용을 작성해 주세요." minHeight={160} />
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <PrimaryBtn onClick={saveBody} color="#1FA97E"><Sparkles size={15} /> 저장</PrimaryBtn>
-                <button onClick={cancelBodyEdit} style={{ fontFamily: FONT, border: "1.5px solid #E5E8EB", background: "#fff", borderRadius: 14, padding: "0 18px", fontWeight: 700, fontSize: 14, color: "#6B7684", cursor: "pointer" }}>취소</button>
+                <button onClick={cancelBodyEdit} style={{ fontFamily: FONT, border: "1.5px solid var(--border)", background: "var(--surface)", borderRadius: 14, padding: "0 18px", fontWeight: 700, fontSize: 14, color: "var(--text-3)", cursor: "pointer" }}>취소</button>
               </div>
             </div>
           ) : problem.body ? (
-            <div className="rte-editable" style={{ marginTop: 14, fontSize: 14, color: "#4E5968", lineHeight: 1.7, overflowX: "auto" }}
+            <div className="rte-editable" style={{ marginTop: 14, fontSize: 14, color: "var(--text-2)", lineHeight: 1.7, overflowX: "auto" }}
               dangerouslySetInnerHTML={{ __html: sanitizeBody(problem.body) }} />
           ) : (
-            <p style={{ margin: "14px 0 0", color: "#A8B1BD", fontSize: 13.5 }}>아직 문제 내용이 없어요. 수정 버튼으로 작성해 보세요.</p>
+            <p style={{ margin: "14px 0 0", color: "var(--text-5)", fontSize: 13.5 }}>아직 문제 내용이 없어요. 수정 버튼으로 작성해 보세요.</p>
           )
         )}
       </div>
@@ -1080,21 +1120,21 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
       {/* 새 풀이 작성 */}
       <div style={{ ...clay.card, marginTop: 14, padding: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <Code2 size={17} color="#3182F6" />
-          <span style={{ fontWeight: 800, fontSize: 15, color: "#191F28" }}>풀이 작성 · 저장</span>
+          <Code2 size={17} color="var(--accent)" />
+          <span style={{ fontWeight: 800, fontSize: 15, color: "var(--text)" }}>풀이 작성 · 저장</span>
         </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
           {[["mine", "🙋 내 풀이"], ["others", "💖 마음에 든 다른 사람 풀이"]].map(([t, label]) => (
             <button key={t} onClick={() => setSolType(t)} style={{
               fontFamily: FONT, padding: "8px 14px", borderRadius: 999, fontWeight: 700, fontSize: 13.5, cursor: "pointer",
-              border: solType === t ? "1.5px solid #3182F6" : "1.5px solid #E5E8EB",
-              background: solType === t ? "#E4F0FF" : "#fff", color: solType === t ? "#3182F6" : "#6B7684",
+              border: solType === t ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
+              background: solType === t ? "var(--accent-soft)" : "var(--surface)", color: solType === t ? "var(--accent)" : "var(--text-3)",
             }}>{label}</button>
           ))}
           {solType === "others" && (
             <input value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="작성자 (선택)"
-              style={{ fontFamily: FONT, border: "1.5px solid #E5E8EB", borderRadius: 999, padding: "8px 14px", fontSize: 13.5, outline: "none", flex: "1 1 140px" }} />
+              style={{ fontFamily: FONT, border: "1.5px solid var(--border)", borderRadius: 999, padding: "8px 14px", fontSize: 13.5, outline: "none", flex: "1 1 140px" }} />
           )}
         </div>
 
@@ -1102,21 +1142,21 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
 
         <textarea value={code} onChange={(e) => setCode(e.target.value)} spellCheck={false}
           placeholder={"// 여기에 코드를 작성하거나 붙여넣어 주세요\n#include <bits/stdc++.h>\nusing namespace std;"}
-          style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 220, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 16, padding: 16, fontSize: 13.5, lineHeight: 1.65, outline: "none" }} />
+          style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 220, resize: "vertical", background: "var(--code-bg)", color: "var(--code-text)", border: "none", borderRadius: 16, padding: 16, fontSize: 13.5, lineHeight: 1.65, outline: "none" }} />
 
         <textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모 (선택) — 배운 점·패턴 등. 코드는 ```로 감싸면 코드 블록으로, `한 단어`는 인라인 코드로 보여요"
-          style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 14, padding: "11px 14px", fontSize: 14, outline: "none", margin: "10px 0", background: "#FAFBFC", resize: "vertical", minHeight: "60px" }} />
+          style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid var(--border)", borderRadius: 14, padding: "11px 14px", fontSize: 14, outline: "none", margin: "10px 0", background: "var(--surface-2)", resize: "vertical", minHeight: "60px" }} />
 
-        {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}><TriangleAlert size={15} />{err}</div>}
+        {err && <div style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--pink)", fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}><TriangleAlert size={15} />{err}</div>}
 
         <PrimaryBtn onClick={addSolution}><Plus size={16} /> 풀이 저장하기</PrimaryBtn>
       </div>
 
       {/* 저장된 풀이 */}
       <div style={{ marginTop: 22 }}>
-        <h2 style={{ fontSize: 17, fontWeight: 800, color: "#191F28", margin: "0 0 12px" }}>저장된 풀이 {problem.solutions.length > 0 && <span style={{ color: "#3182F6" }}>{problem.solutions.length}</span>}</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", margin: "0 0 12px" }}>저장된 풀이 {problem.solutions.length > 0 && <span style={{ color: "var(--accent)" }}>{problem.solutions.length}</span>}</h2>
         {problem.solutions.length === 0 && (
-          <div style={{ ...clay.card, padding: 28, textAlign: "center", color: "#8B95A1", fontSize: 14 }}>
+          <div style={{ ...clay.card, padding: 28, textAlign: "center", color: "var(--text-4)", fontSize: 14 }}>
             아직 저장된 풀이가 없어요. 위에서 첫 풀이를 저장해 보세요! ✍️
           </div>
         )}
@@ -1125,13 +1165,13 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
             const isEditing = editingId === sol.id;
             const solLang = langOf(sol.lang);
             return (
-              <div key={sol.id} style={{ ...clay.card, padding: 18, border: isEditing ? "2px solid #3182F6" : undefined }}>
+              <div key={sol.id} style={{ ...clay.card, padding: 18, border: isEditing ? "2px solid var(--accent)" : undefined }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{
                       display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 13.5,
-                      color: sol.type === "mine" ? "#3182F6" : "#E0527A",
-                      background: sol.type === "mine" ? "#E4F0FF" : "#FFE9EF", padding: "5px 12px", borderRadius: 999,
+                      color: sol.type === "mine" ? "var(--accent)" : "var(--pink)",
+                      background: sol.type === "mine" ? "var(--accent-soft)" : "var(--pink-soft)", padding: "5px 12px", borderRadius: 999,
                     }}>
                       {sol.type === "mine" ? <User size={13} /> : <Heart size={13} />} {sol.author}
                     </span>
@@ -1145,17 +1185,17 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => runReview(sol)} disabled={reviewing === sol.id} style={{
                         fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13,
-                        color: "#7C5CE0", background: "#EFE9FF", border: "none", borderRadius: 999, padding: "7px 14px", cursor: "pointer",
+                        color: "var(--purple)", background: "var(--purple-soft)", border: "none", borderRadius: 999, padding: "7px 14px", cursor: "pointer",
                       }}>
                         {reviewing === sol.id ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
                         {sol.review ? "리뷰 다시 받기" : "AI 코드 리뷰"}
                       </button>
                       <button onClick={() => startInlineEdit(sol)} style={{
                         fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, fontSize: 13,
-                        color: "#3182F6", background: "#E4F0FF", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer",
+                        color: "var(--accent)", background: "var(--accent-soft)", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer",
                       }}>✏️ 수정</button>
-                      <button onClick={() => delSolution(sol.id)} style={{ border: "none", background: "#F2F4F6", borderRadius: 999, padding: "7px 10px", cursor: "pointer" }}>
-                        <Trash2 size={14} color="#8B95A1" />
+                      <button onClick={() => delSolution(sol.id)} style={{ border: "none", background: "var(--fill)", borderRadius: 999, padding: "7px 10px", cursor: "pointer" }}>
+                        <Trash2 size={14} color="var(--text-4)" />
                       </button>
                     </div>
                   )}
@@ -1163,12 +1203,12 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
 
                 {/* 리뷰 버튼 아래 안내 — 실패하면 에러, 성공해서 결과 있으면 안내 */}
                 {!isEditing && reviewErr[sol.id] && (
-                  <div style={{ display: "flex", gap: 7, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600, background: "#FFE9EF", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", gap: 7, alignItems: "center", color: "var(--pink)", fontSize: 13.5, fontWeight: 600, background: "var(--pink-soft)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                     <TriangleAlert size={16} style={{ flexShrink: 0 }} />{reviewErr[sol.id]}
                   </div>
                 )}
                 {!isEditing && !reviewErr[sol.id] && sol.review && (
-                  <div style={{ display: "flex", gap: 7, alignItems: "center", color: "#7C5CE0", fontSize: 13.5, fontWeight: 600, background: "#EFE9FF", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", gap: 7, alignItems: "center", color: "var(--purple)", fontSize: 13.5, fontWeight: 600, background: "var(--purple-soft)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                     <Sparkles size={16} style={{ flexShrink: 0 }} /> 리뷰가 완료됐어요! 아래 AI 코드 리뷰에서 분석 결과를 확인하세요 👇
                   </div>
                 )}
@@ -1178,21 +1218,21 @@ function ProblemDetail({ problem, onBack, onUpdate, onDelete }) {
                   <div>
                     <div style={{ marginBottom: 8 }}>{langPicker(inlineLang, setInlineLang)}</div>
                     <textarea value={inlineCode} onChange={(e) => setInlineCode(e.target.value)} spellCheck={false}
-                      style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 200, resize: "vertical", background: "#191F28", color: "#E8F0FE", border: "none", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, outline: "none" }} />
+                      style={{ ...mono, width: "100%", boxSizing: "border-box", minHeight: 200, resize: "vertical", background: "var(--code-bg)", color: "var(--code-text)", border: "none", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, outline: "none" }} />
                     <textarea value={inlineMemo} onChange={(e) => setInlineMemo(e.target.value)} placeholder="메모 (선택) — 줄바꿈 가능, 코드는 ```로 감싸면 코드 블록으로 보여요"
-                      style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid #E5E8EB", borderRadius: 12, padding: "10px 13px", fontSize: 13.5, outline: "none", margin: "10px 0", background: "#FAFBFC", resize: "vertical", minHeight: "60px", lineHeight: 1.6 }} />
+                      style={{ fontFamily: FONT, width: "100%", boxSizing: "border-box", border: "1.5px solid var(--border)", borderRadius: 12, padding: "10px 13px", fontSize: 13.5, outline: "none", margin: "10px 0", background: "var(--surface-2)", resize: "vertical", minHeight: "60px", lineHeight: 1.6 }} />
                     <div style={{ display: "flex", gap: 8 }}>
                       <PrimaryBtn onClick={() => saveInlineEdit(sol.id)} color="#1FA97E" style={{ padding: "10px 18px", fontSize: 13.5 }}>
                         <Sparkles size={14} /> 저장
                       </PrimaryBtn>
-                      <button onClick={cancelInlineEdit} style={{ fontFamily: FONT, border: "1.5px solid #E5E8EB", background: "#fff", borderRadius: 12, padding: "0 16px", fontWeight: 700, fontSize: 13.5, color: "#6B7684", cursor: "pointer" }}>취소</button>
+                      <button onClick={cancelInlineEdit} style={{ fontFamily: FONT, border: "1.5px solid var(--border)", background: "var(--surface)", borderRadius: 12, padding: "0 16px", fontWeight: 700, fontSize: 13.5, color: "var(--text-3)", cursor: "pointer" }}>취소</button>
                     </div>
                   </div>
                 ) : (
                   // ── 보기 모드: 신택스 하이라이팅 적용 ──
                   <>
                     {sol.memo && <MemoView text={sol.memo} />}
-                    <pre style={{ ...mono, margin: 0, background: "#191F28", color: "#E8F0FE", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}
+                    <pre style={{ ...mono, margin: 0, background: "var(--code-bg)", color: "var(--code-text)", borderRadius: 14, padding: 16, fontSize: 13, lineHeight: 1.6, overflowX: "auto" }}
                       dangerouslySetInnerHTML={{ __html: highlightCode(sol.code, sol.lang || "cpp") }} />
                     <ReviewCard review={sol.review} />
                   </>
@@ -1220,6 +1260,7 @@ const saveGuest = (arr) => {
 };
 
 export default function App() {
+  const [theme, toggleTheme] = useTheme();
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [problems, setProblems] = useState([]);
@@ -1348,8 +1389,8 @@ export default function App() {
   // 인증 상태 확인 전
   if (!authReady) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F7FB" }}>
-        <Loader2 size={26} color="#3182F6" style={{ animation: "spin 1s linear infinite" }} />
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--page-1)" }}>
+        <Loader2 size={26} color="var(--accent)" style={{ animation: "spin 1s linear infinite" }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
@@ -1368,42 +1409,54 @@ export default function App() {
   const countOf = (id) => problems.filter((p) => p.category === id).length;
 
   return (
-    <div style={{ minHeight: "100vh", fontFamily: FONT, background: "linear-gradient(180deg,#F4F7FB 0%, #EEF3FA 40%, #F6F4FB 100%)", color: "#191F28" }}>
+    <div style={{ minHeight: "100vh", fontFamily: FONT, background: "linear-gradient(180deg,var(--page-1) 0%, var(--page-2) 40%, var(--page-3) 100%)", color: "var(--text)" }}>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; }
         @keyframes floatUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .rise { animation: floatUp .4s ease both; }
-        button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #3182F6; outline-offset: 2px; }
+        button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) { .rise, .spin { animation: none; } }
-        ::placeholder { color: #A8B1BD; }
+        ::placeholder { color: var(--text-5); }
       `}</style>
 
       {/* 상단 바 */}
       <header style={{ ...clay.glass, position: "sticky", top: 0, zIndex: 40, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <button onClick={goHome} style={{ fontFamily: FONT, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", gap: 9, minWidth: 0, flexShrink: 1 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 12, background: "linear-gradient(135deg,#3182F6,#7C5CE0)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 14px rgba(49,130,246,0.35)", flexShrink: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 12, background: "linear-gradient(135deg,var(--accent),var(--purple))", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 14px rgba(49,130,246,0.35)", flexShrink: 0 }}>
             <Code2 size={18} color="#fff" />
           </div>
-          <span style={{ fontWeight: 800, fontSize: 17, color: "#191F28", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>코테 아카이브</span>
+          <span style={{ fontWeight: 800, fontSize: 17, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>코테 아카이브</span>
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "라이트 모드로 보기" : "다크 모드로 보기"}
+            aria-label={theme === "dark" ? "라이트 모드로 보기" : "다크 모드로 보기"}
+            style={{
+              fontFamily: FONT, border: "1px solid var(--border)", background: "var(--surface)",
+              borderRadius: 12, padding: "10px 12px", cursor: "pointer",
+              display: "flex", alignItems: "center", color: "var(--text-3)",
+            }}
+          >
+            {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
           <PrimaryBtn onClick={() => setShowAdd(true)} style={{ padding: "10px 18px", fontSize: 14 }}>
             <Plus size={16} /> 문제 등록
           </PrimaryBtn>
           {session ? (
             <button onClick={logout} title="로그아웃" style={{
-              fontFamily: FONT, border: "1px solid #E5E8EB", background: "#fff", borderRadius: 12,
+              fontFamily: FONT, border: "1px solid var(--border)", background: "var(--surface)", borderRadius: 12,
               padding: "10px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-              color: "#6B7684", fontWeight: 700, fontSize: 13,
+              color: "var(--text-3)", fontWeight: 700, fontSize: 13,
             }}>
               <LogOut size={15} />
             </button>
           ) : (
             <button onClick={() => setShowAuth(true)} style={{
-              fontFamily: FONT, border: "1px solid #E5E8EB", background: "#fff", borderRadius: 12,
+              fontFamily: FONT, border: "1px solid var(--border)", background: "var(--surface)", borderRadius: 12,
               padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-              color: "#3182F6", fontWeight: 700, fontSize: 13.5,
+              color: "var(--accent)", fontWeight: 700, fontSize: 13.5,
             }}>
               <LogIn size={15} /> 로그인
             </button>
@@ -1415,13 +1468,13 @@ export default function App() {
       {!session && (
         <div style={{
           ...clay.glass, margin: "14px auto 0", maxWidth: 1280, padding: "12px 18px", borderRadius: 16,
-          display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, color: "#4E5968",
-          background: "linear-gradient(135deg,#FFF5E6,#FFF9F0)", border: "1px solid #FFE5C2",
+          display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, color: "var(--text-2)",
+          background: "linear-gradient(135deg,var(--warn-bg),var(--warn-bg-2))", border: "1px solid var(--warn-border)",
         }}>
           <span style={{ fontSize: 18 }}>👋</span>
           <span style={{ flex: 1, lineHeight: 1.5 }}>
-            <b style={{ color: "#E8923A" }}>게스트 모드</b>로 보고 있어요. 지금 저장한 건 이 브라우저에만 남아요.{" "}
-            <button onClick={() => setShowAuth(true)} style={{ fontFamily: FONT, border: "none", background: "transparent", color: "#3182F6", fontWeight: 800, cursor: "pointer", padding: 0, fontSize: 13.5 }}>
+            <b style={{ color: "var(--orange)" }}>게스트 모드</b>로 보고 있어요. 지금 저장한 건 이 브라우저에만 남아요.{" "}
+            <button onClick={() => setShowAuth(true)} style={{ fontFamily: FONT, border: "none", background: "transparent", color: "var(--accent)", fontWeight: 800, cursor: "pointer", padding: 0, fontSize: 13.5 }}>
               로그인하면
             </button>{" "}
             어디서든 보이고, 지금 저장한 것도 자동으로 옮겨가요!
@@ -1431,7 +1484,7 @@ export default function App() {
 
       {/* 로그인 직후 동기화 중 표시 */}
       {syncing && (
-        <div style={{ maxWidth: 1280, margin: "10px auto 0", padding: "0 16px", display: "flex", alignItems: "center", gap: 8, color: "#3182F6", fontSize: 13.5, fontWeight: 700 }}>
+        <div style={{ maxWidth: 1280, margin: "10px auto 0", padding: "0 16px", display: "flex", alignItems: "center", gap: 8, color: "var(--accent)", fontSize: 13.5, fontWeight: 700 }}>
           <Loader2 size={15} className="spin" /> 게스트로 저장한 문제를 계정으로 옮기는 중…
         </div>
       )}
@@ -1445,7 +1498,7 @@ export default function App() {
             <h1 style={{ margin: 0, fontSize: 27, fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1.35 }}>
               유형별로 차곡차곡,<br />나만의 알고리즘 패턴 노트 🗂️
             </h1>
-            <p style={{ margin: "8px 0 0", color: "#6B7684", fontSize: 14.5 }}>
+            <p style={{ margin: "8px 0 0", color: "var(--text-3)", fontSize: 14.5 }}>
               문제를 등록하면 AI가 유형을 분류하고, 저장한 풀이는 표와 수식으로 정리해 드려요.
             </p>
           </div>
@@ -1456,14 +1509,14 @@ export default function App() {
               <button key={c.id} onClick={() => setFilter(filter === c.id ? "all" : c.id)} style={{
                 fontFamily: FONT, textAlign: "left", cursor: "pointer", padding: 16, borderRadius: 22,
                 background: c.grad, transition: "transform .18s, box-shadow .18s",
-                border: filter === c.id ? `2px solid ${c.deep}` : "2px solid rgba(255,255,255,0.8)",
-                boxShadow: filter === c.id ? `0 12px 26px ${c.deep}35` : "0 8px 20px rgba(100,116,139,0.10), inset 0 1px 0 rgba(255,255,255,0.9)",
+                border: filter === c.id ? `2px solid ${c.deep}` : "2px solid var(--ring-hi)",
+                boxShadow: filter === c.id ? `0 12px 26px ${c.deep}35` : "0 8px 20px var(--shadow-mid), inset 0 1px 0 var(--inset-hi)",
               }}
                 onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
                 onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
               >
                 <div style={{ fontSize: 26, marginBottom: 8, filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.12))" }}>{c.emoji}</div>
-                <div style={{ fontWeight: 800, fontSize: 13.5, color: "#333D4B", lineHeight: 1.35 }}>{c.name}</div>
+                <div style={{ fontWeight: 800, fontSize: 13.5, color: "var(--text-1)", lineHeight: 1.35 }}>{c.name}</div>
                 <div style={{ marginTop: 6, fontWeight: 800, fontSize: 13, color: c.deep }}>{countOf(c.id)}문제</div>
               </button>
             ))}
@@ -1471,13 +1524,13 @@ export default function App() {
 
           {/* 필터 칩 + 목록 */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-            <Chip active={filter === "all"} color={{ deep: "#191F28" }} onClick={() => setFilter("all")}>전체 {problems.length}</Chip>
+            <Chip active={filter === "all"} color={{ deep: "var(--text)" }} onClick={() => setFilter("all")}>전체 {problems.length}</Chip>
             {CATEGORIES.map((c) => (
               <Chip key={c.id} active={filter === c.id} color={c} onClick={() => setFilter(c.id)}>{c.short}</Chip>
             ))}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: filter === "etc" ? 10 : 14 }}>
-            <Chip active={levelFilter === "all"} color={{ deep: "#6B7684" }} onClick={() => setLevelFilter("all")}>난이도 전체</Chip>
+            <Chip active={levelFilter === "all"} color={{ deep: "var(--text-3)" }} onClick={() => setLevelFilter("all")}>난이도 전체</Chip>
             {LEVELS.map((l) => (
               <Chip key={l.id} active={levelFilter === l.id} color={{ deep: l.color }} onClick={() => setLevelFilter(l.id)}>{l.name}</Chip>
             ))}
@@ -1485,21 +1538,21 @@ export default function App() {
           {/* 기타 선택 시 소분류 필터 */}
           {filter === "etc" && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14, paddingLeft: 4 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: "#8B95A1" }}>📦 소분류</span>
-              <Chip active={subFilter === "all"} color={{ deep: "#6B7684" }} onClick={() => setSubFilter("all")}>전체</Chip>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: "var(--text-4)" }}>📦 소분류</span>
+              <Chip active={subFilter === "all"} color={{ deep: "var(--text-3)" }} onClick={() => setSubFilter("all")}>전체</Chip>
               {SUBCATEGORIES.map((s) => (
-                <Chip key={s.id} active={subFilter === s.id} color={{ deep: "#6B7684" }} onClick={() => setSubFilter(s.id)}>{s.name}</Chip>
+                <Chip key={s.id} active={subFilter === s.id} color={{ deep: "var(--text-3)" }} onClick={() => setSubFilter(s.id)}>{s.name}</Chip>
               ))}
             </div>
           )}
 
           {!loaded ? (
-            <div style={{ textAlign: "center", padding: 60, color: "#8B95A1" }}><Loader2 className="spin" size={22} style={{ display: "inline" }} /></div>
+            <div style={{ textAlign: "center", padding: 60, color: "var(--text-4)" }}><Loader2 className="spin" size={22} style={{ display: "inline" }} /></div>
           ) : shown.length === 0 ? (
             <div style={{ ...clay.card, padding: "48px 24px", textAlign: "center" }}>
               <div style={{ fontSize: 40, marginBottom: 10 }}>🌱</div>
               <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 6 }}>아직 등록된 문제가 없어요</div>
-              <div style={{ color: "#6B7684", fontSize: 14, marginBottom: 18 }}>첫 문제를 등록하고 패턴 노트를 시작해 보세요.</div>
+              <div style={{ color: "var(--text-3)", fontSize: 14, marginBottom: 18 }}>첫 문제를 등록하고 패턴 노트를 시작해 보세요.</div>
               <PrimaryBtn onClick={() => setShowAdd(true)} style={{ justifyContent: "center" }}><Plus size={16} /> 문제 등록하기</PrimaryBtn>
             </div>
           ) : (
@@ -1525,8 +1578,8 @@ export default function App() {
                         </span>
                       )}
                     </div>
-                    <div style={{ fontWeight: 800, fontSize: 15.5, margin: "10px 0 8px", lineHeight: 1.4, color: "#191F28" }}>{p.title}</div>
-                    <div style={{ display: "flex", gap: 10, fontSize: 12.5, color: "#8B95A1", fontWeight: 600 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15.5, margin: "10px 0 8px", lineHeight: 1.4, color: "var(--text)" }}>{p.title}</div>
+                    <div style={{ display: "flex", gap: 10, fontSize: 12.5, color: "var(--text-4)", fontWeight: 600 }}>
                       <span>🙋 내 풀이 {mine}</span>
                       <span>💖 찜한 풀이 {liked}</span>
                     </div>
