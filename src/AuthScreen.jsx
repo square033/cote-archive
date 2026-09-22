@@ -48,24 +48,24 @@ export default function AuthScreen({ onClose }) {
 
   const input = {
     fontFamily: FONT, width: "100%", boxSizing: "border-box",
-    border: "1.5px solid #E5E8EB", borderRadius: 14, padding: "13px 15px",
-    fontSize: 15, outline: "none", background: "#FAFBFC", color: "#191F28",
+    border: "1.5px solid var(--border)", borderRadius: 14, padding: "13px 15px",
+    fontSize: 15, outline: "none", background: "var(--surface-2)", color: "var(--text)",
   };
 
   return (
     <div style={{
       minHeight: "100vh", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center",
-      background: "linear-gradient(180deg,#F4F7FB 0%, #EEF3FA 40%, #F6F4FB 100%)", padding: 16,
+      background: "linear-gradient(180deg,var(--page-1) 0%, var(--page-2) 40%, var(--page-3) 100%)", padding: 16,
     }}>
       <div style={{
-        width: "100%", maxWidth: 400, background: "#fff", borderRadius: 28, padding: "36px 28px",
-        boxShadow: "0 16px 40px rgba(100,116,139,0.14), inset 0 1px 0 rgba(255,255,255,0.9)",
-        border: "1px solid rgba(255,255,255,0.7)",
+        width: "100%", maxWidth: 400, background: "var(--surface)", borderRadius: 28, padding: "36px 28px",
+        boxShadow: "0 16px 40px var(--shadow-mid), inset 0 1px 0 var(--inset-hi)",
+        border: "1px solid var(--veil)",
       }}>
         {/* 둘러보기로 돌아가기 (게스트가 로그인 화면 열었을 때만) */}
         {onClose && (
           <button onClick={onClose} style={{
-            fontFamily: FONT, border: "none", background: "transparent", color: "#8B95A1",
+            fontFamily: FONT, border: "none", background: "transparent", color: "var(--text-4)",
             fontWeight: 700, fontSize: 13.5, cursor: "pointer", display: "inline-flex",
             alignItems: "center", gap: 3, padding: 0, marginBottom: 14,
           }}>
@@ -76,14 +76,14 @@ export default function AuthScreen({ onClose }) {
         <div style={{ textAlign: "center", marginBottom: 26 }}>
           <div style={{
             width: 56, height: 56, borderRadius: 18, margin: "0 auto 14px",
-            background: "linear-gradient(135deg,#3182F6,#7C5CE0)",
+            background: "linear-gradient(135deg,var(--accent),var(--purple))",
             display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: "0 10px 24px rgba(49,130,246,0.35)",
           }}>
             <Code2 size={28} color="#fff" />
           </div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#191F28" }}>코테 아카이브</h1>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, color: "#8B95A1" }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text)" }}>코테 아카이브</h1>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, color: "var(--text-4)" }}>
             {mode === "login" ? "로그인하고 어디서든 풀이를 확인하세요" : "가입하고 나만의 패턴 노트를 시작하세요"}
           </p>
         </div>
@@ -96,19 +96,19 @@ export default function AuthScreen({ onClose }) {
             onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
 
           {err && (
-            <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#E0527A", fontSize: 13.5, fontWeight: 600 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--pink)", fontSize: 13.5, fontWeight: 600 }}>
               <TriangleAlert size={15} />{err}
             </div>
           )}
           {info && (
-            <div style={{ background: "#E9FBF3", color: "#1FA97E", fontSize: 13.5, fontWeight: 700, borderRadius: 12, padding: "11px 14px", lineHeight: 1.5 }}>
+            <div style={{ background: "var(--ok-bg)", color: "var(--green)", fontSize: 13.5, fontWeight: 700, borderRadius: 12, padding: "11px 14px", lineHeight: 1.5 }}>
               {info}
             </div>
           )}
 
           <button onClick={submit} disabled={busy} style={{
             fontFamily: FONT, fontWeight: 700, fontSize: 15.5, color: "#fff",
-            background: busy ? "#B0C4DE" : "#3182F6", border: "none",
+            background: busy ? "var(--disabled)" : "var(--accent-btn)", border: "none",
             cursor: busy ? "default" : "pointer", padding: "14px 0", borderRadius: 16,
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             boxShadow: busy ? "none" : "0 8px 20px rgba(49,130,246,0.4)", marginTop: 4,
@@ -120,10 +120,10 @@ export default function AuthScreen({ onClose }) {
         </div>
 
         {/* 모드 전환 */}
-        <p style={{ textAlign: "center", margin: "18px 0 0", fontSize: 13.5, color: "#8B95A1" }}>
+        <p style={{ textAlign: "center", margin: "18px 0 0", fontSize: 13.5, color: "var(--text-4)" }}>
           {mode === "login" ? "아직 계정이 없나요?" : "이미 계정이 있나요?"}{" "}
           <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setErr(""); setInfo(""); }}
-            style={{ fontFamily: FONT, border: "none", background: "transparent", color: "#3182F6", fontWeight: 800, fontSize: 13.5, cursor: "pointer", padding: 0 }}>
+            style={{ fontFamily: FONT, border: "none", background: "transparent", color: "var(--accent)", fontWeight: 800, fontSize: 13.5, cursor: "pointer", padding: 0 }}>
             {mode === "login" ? "가입하기" : "로그인"}
           </button>
         </p>
